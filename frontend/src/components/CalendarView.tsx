@@ -1,4 +1,16 @@
 import { useState, useEffect } from 'react'
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from '@dnd-kit/core'
 import { Sparkles, Trash2, Loader2, Clock, GripVertical } from 'lucide-react'
 import { getCalendar, autoSchedule, requestVeto, moveMatch } from '../lib/api'
 import RecipeDetailModal from './RecipeDetailModal'
@@ -20,12 +32,119 @@ interface DayData {
   }
 }
 
+// Draggable meal card
+function MealCard({ dayData, isOverlay = false }: { dayData: DayData; isOverlay?: boolean }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: dayData.id,
+    data: { dayData },
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`flex items-center gap-3 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm ${
+        isDragging ? 'opacity-50' : ''
+      } ${isOverlay ? 'shadow-xl scale-105 rotate-2 cursor-grabbing' : 'cursor-grab active:cursor-grabbing'} transition-transform`}
+    >
+      <div className="flex items-center gap-2">
+        <GripVertical size={16} className="text-[#8C8C8C] shrink-0" />
+        {dayData.recipe.image_url ? (
+          <img src={dayData.recipe.image_url} alt="" className="h-10 w-10 rounded-lg object-cover shrink-0" />
+        ) : (
+          <div className="h-10 w-10 rounded-lg bg-[#FFFBF7] flex items-center justify-center shrink-0">
+            <Clock size={14} className="text-[#8C8C8C]" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[#2D2D2D] truncate">
+          {dayData.recipe.title}
+        </p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="flex items-center gap-1 text-xs text-[#8C8C8C]">
+            <Clock size={12} />
+            {dayData.recipe.total_time_minutes} min
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Droppable day column
+function DaySlot({
+  day,
+  label,
+  dayData,
+  onClickRecipe,
+  onRemove,
+  isActive,
+}: {
+  day: string
+  label: string
+  dayData?: DayData
+  onClickRecipe: (recipe: any) => void
+  onRemove: (day: string) => void
+  isActive: boolean
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: day })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-2xl border-2 p-3 transition-colors ${
+        isOver
+          ? 'border-[#4ECDC4] bg-[#4ECDC4]/10'
+          : isActive
+          ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5'
+          : 'border-[#F0E6E0] bg-white'
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-[#8C8C8C] uppercase">{label}</span>
+        {dayData && (
+          <button
+            onClick={() => onRemove(day)}
+            className="p-1 rounded-full hover:bg-red-50 text-[#8C8C8C] hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+
+      {dayData ? (
+        <div onClick={() => onClickRecipe(dayData.recipe)}>
+          <MealCard dayData={dayData} />
+        </div>
+      ) : (
+        <div className={`h-16 rounded-xl border-2 border-dashed flex items-center justify-center ${
+          isOver ? 'border-[#4ECDC4] bg-[#4ECDC4]/5' : 'border-[#E8E8E8] bg-[#FFFBF7]'
+        }`}>
+          <span className="text-xs text-[#8C8C8C]">Drop here</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CalendarView() {
   const [calendar, setCalendar] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<any>(null)
-  const [draggingDay, setDraggingDay] = useState<string | null>(null)
+  const [activeDrag, setActiveDrag] = useState<DayData | null>(null)
+
+  // Touch + pointer sensors for mobile & desktop
+  const sensors = useSensors(
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 10 },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  )
 
   useEffect(() => {
     loadCalendar()
@@ -73,30 +192,31 @@ export default function CalendarView() {
     }
   }
 
-  // Drag handlers
-  function onDragStart(e: React.DragEvent, day: string) {
-    setDraggingDay(day)
-    e.dataTransfer.setData('text/plain', day)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function onDragOver(e: React.DragEvent) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  function onDrop(e: React.DragEvent, toDay: string) {
-    e.preventDefault()
-    const fromDay = e.dataTransfer.getData('text/plain')
-    if (fromDay && fromDay !== toDay && calendar?.[fromDay]) {
-      const matchId = calendar[fromDay].id
-      handleMove(matchId, fromDay, toDay)
+  function handleDragStart(event: DragStartEvent) {
+    const data = event.active.data.current?.dayData as DayData
+    if (data) {
+      setActiveDrag(data)
     }
-    setDraggingDay(null)
   }
 
-  function onDragEnd() {
-    setDraggingDay(null)
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveDrag(null)
+
+    if (!over) return
+
+    const fromDay = active.id as string
+    const toDay = over.id as string
+
+    if (fromDay === toDay) return
+
+    // fromDay is the match ID, but we need the actual day name
+    // Find which day this match is on
+    const dayName = DAYS.find((d) => calendar?.[d]?.id === fromDay)
+    if (!dayName) return
+
+    const matchId = fromDay
+    handleMove(matchId, dayName, toDay)
   }
 
   if (loading) {
@@ -110,93 +230,52 @@ export default function CalendarView() {
   return (
     <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-[#2D2D2D]">This Week</h2>
+        <h2 className="text-lg font-bold text-[#2D2D2D]">Weekly Plan</h2>
         <button
           onClick={handleAutoSchedule}
           disabled={autoScheduling}
-          className="flex items-center gap-1.5 rounded-full bg-[#4ECDC4] px-4 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-[#FF6B4A] px-4 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-50"
         >
           {autoScheduling ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={16} className="animate-spin" />
           ) : (
-            <Sparkles size={14} />
+            <Sparkles size={16} />
           )}
           Auto-Schedule
         </button>
       </div>
 
-      <div className="space-y-2">
-        {DAYS.map((day, i) => {
-          const dayData: DayData | null = calendar?.[day]
-          const isDragging = draggingDay === day
-          return (
-            <div
-              key={day}
-              draggable={!!dayData}
-              onDragStart={(e) => onDragStart(e, day)}
-              onDragOver={onDragOver}
-              onDrop={(e) => onDrop(e, day)}
-              onDragEnd={onDragEnd}
-              className={`flex items-center gap-3 rounded-2xl border p-3 transition ${
-                dayData ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5' : 'border-[#F0E6E0] bg-white'
-              } ${isDragging ? 'opacity-50' : ''} ${draggingDay && draggingDay !== day && !dayData ? 'border-dashed border-[#4ECDC4]' : ''}`}
-            >
-              {/* Day badge */}
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FFFBF7]">
-                <span className="text-xs font-bold text-[#8C8C8C]">{DAY_LABELS[i]}</span>
-              </div>
-
-              {dayData ? (
-                <div 
-                  className="flex-1 min-w-0"
-                  onClick={() => setSelectedRecipe(dayData.recipe)}
-                >
-                  <p className="text-sm font-medium text-[#2D2D2D] truncate">
-                    {dayData.recipe.title}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="flex items-center gap-1 text-xs text-[#8C8C8C]">
-                      <Clock size={12} />
-                      {dayData.recipe.total_time_minutes} min
-                    </span>
-                    {dayData.recipe.tags?.slice(0, 2).map((tag: string) => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#4ECDC4]/10 text-[#4ECDC4]">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-[#8C8C8C]">Drop a meal here</p>
-              )}
-
-              {dayData && (
-                <div className="flex items-center gap-1">
-                  <div className="p-1.5 rounded-full text-[#8C8C8C]" title="Drag to move">
-                    <GripVertical size={16} />
-                  </div>
-                  <button
-                    onClick={() => handleRemove(day)}
-                    className="p-2 rounded-full text-[#8C8C8C] hover:bg-red-50 hover:text-red-500 active:scale-95"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {calendar?.monday && (
-        <div className="mt-4 p-3 rounded-2xl bg-[#FFD93D]/10 border border-[#FFD93D]/20">
-          <p className="text-xs text-[#8C8C8C]">
-            💡 Drag a meal to a different day to reschedule. Tap a meal to see details.
-          </p>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 gap-3">
+          {DAYS.map((day, i) => {
+            const dayData = calendar?.[day] as DayData | undefined
+            return (
+              <DaySlot
+                key={day}
+                day={day}
+                label={DAY_LABELS[i]}
+                dayData={dayData}
+                onClickRecipe={setSelectedRecipe}
+                onRemove={handleRemove}
+                isActive={!!dayData}
+              />
+            )
+          })}
         </div>
-      )}
 
-      {/* Recipe Detail Modal */}
+        <DragOverlay>
+          {activeDrag ? <MealCard dayData={activeDrag} isOverlay /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      <p className="mt-4 text-center text-xs text-[#8C8C8C]">
+        Drag and drop meals to reorder. Tap to view details.
+      </p>
+
       <RecipeDetailModal
         recipe={selectedRecipe}
         onClose={() => setSelectedRecipe(null)}
