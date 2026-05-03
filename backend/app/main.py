@@ -296,6 +296,7 @@ def _spoonacular_to_recipe(data: dict, db: Session) -> Recipe:
     
     # Parse ingredients
     for ing in data.get("extendedIngredients", []):
+        aisle = ing.get("aisle")
         ri = RecipeIngredient(
             id=str(uuid.uuid4()),
             recipe_id=recipe.id,
@@ -303,9 +304,9 @@ def _spoonacular_to_recipe(data: dict, db: Session) -> Recipe:
             original_name=ing.get("originalName"),
             quantity=ing.get("amount"),
             unit=ing.get("unit"),
-            category=ing.get("aisle", "unknown"),
-            is_perishable=ing.get("aisle", "") in ["Produce", "Meat", "Seafood", "Milk, Eggs, Other Dairy"],
-            shelf_life_days=7 if ing.get("aisle", "") in ["Produce"] else 14,
+            category=aisle if aisle else "unknown",
+            is_perishable=(aisle or "") in ["Produce", "Meat", "Seafood", "Milk, Eggs, Other Dairy"],
+            shelf_life_days=7 if (aisle or "") in ["Produce"] else 14,
         )
         db.add(ri)
     

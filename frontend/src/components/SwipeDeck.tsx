@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, Clock, Flame, ChefHat, Loader2, Sparkles } from 'lucide-react'
 import { getRecipeFeed, swipeRecipe } from '../lib/api'
 
@@ -21,6 +21,14 @@ export default function SwipeDeck() {
   const [error, setError] = useState('')
   const [matchNotification, setMatchNotification] = useState<string | null>(null)
 
+  // Drag state
+  const [dragX, setDragX] = useState(0)
+  const [dragY, setDragY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const startXRef = useRef(0)
+  const startYRef = useRef(0)
+  const cardRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     loadRecipes()
   }, [])
@@ -30,38 +38,125 @@ export default function SwipeDeck() {
     setError('')
     try {
       const data = await getRecipeFeed(20)
-      console.log('Recipes loaded:', data.recipes?.length)
       setRecipes(data.recipes || [])
       setCurrentIdx(0)
+      setDragX(0)
+      setDragY(0)
     } catch (err: any) {
-      console.error('Failed to load recipes:', err)
-      setError(err.message || 'Failed to load recipes')
+      setError(err.message || 'Failed to fetch recipes')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleSwipe(dir: 'left' | 'right') {
+  const finishSwipe = useCallback((dir: 'left' | 'right') => {
     if (currentIdx >= recipes.length) return
     const recipe = recipes[currentIdx]
 
-    try {
-      const result = await swipeRecipe(recipe.id, dir)
-      console.log('Swipe result:', result)
-      if (result.match) {
-        setMatchNotification(`You matched on ${recipe.title}!`)
-        setTimeout(() => setMatchNotification(null), 3000)
+    // Animate card flying off
+    const flyX = dir === 'right' ? window.innerWidth + 200 : -(window.innerWidth + 200)
+    setDragX(flyX)
+    setDragY(0)
+
+    setTimeout(async () => {
+      try {
+        const result = await swipeRecipe(recipe.id, dir)
+        if (result.match) {
+          setMatchNotification(`You matched on ${recipe.title}!`)
+          setTimeout(() => setMatchNotification(null), 3000)
+        }
+      } catch (err) {
+        console.error(err)
       }
-    } catch (err) {
-      console.error(err)
+
+      setCurrentIdx(prev => prev + 1)
+      setDragX(0)
+      setDragY(0)
+
+      if (currentIdx >= recipes.length - 5) {
+        loadRecipes()
+      }
+    }, 300)
+  }, [currentIdx, recipes])
+
+  // Touch / mouse handlers
+  const handleStart = useCallback((clientX: number, clientY: number) => {
+    setIsDragging(true)
+    startXRef.current = clientX
+    startYRef.current = clientY
+  }, [])
+
+  const handleMove = useCallback((clientX: number, clientY: number) => {
+    if (!isDragging) return
+    const deltaX = clientX - startXRef.current
+    const deltaY = clientY - startYRef.current
+    setDragX(deltaX)
+    setDragY(deltaY)
+  }, [isDragging])
+
+  const handleEnd = useCallback(() => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    const threshold = 100
+    if (dragX > threshold) {
+      finishSwipe('right')
+    } else if (dragX < -threshold) {
+      finishSwipe('left')
+    } else {
+      // Snap back
+      setDragX(0)
+      setDragY(0)
     }
+  }, [isDragging, dragX, finishSwipe])
 
-    setCurrentIdx(prev => prev + 1)
+  // Touch events
+  const onTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    handleStart(touch.clientX, touch.clientY)
+  }
 
-    if (currentIdx >= recipes.length - 5) {
-      loadRecipes()
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (isDragging) e.preventDefault()
+    const touch = e.touches[0]
+    handleMove(touch.clientX, touch.clientY)
+  }
+
+  const onTouchEnd = () => {
+    handleEnd()
+  }
+
+  // Mouse events
+  const onMouseDown = (e: React.MouseEvent) => {
+    handleStart(e.clientX, e.clientY)
+  }
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      e.preventDefault()
+      handleMove(e.clientX, e.clientY)
     }
   }
+
+  const onMouseUp = () => {
+    handleEnd()
+  }
+
+  const onMouseLeave = () => {
+    if (isDragging) {
+      handleEnd()
+    }
+  }
+
+  // Rotation based on drag distance
+  const rotation = dragX * 0.08
+
+  // Opacity of swipe indicators
+  const likeOpacity = Math.min(Math.max(dragX / 150, 0), 1)
+  const nopeOpacity = Math.min(Math.max(-dragX / 150, 0), 1)
+
+  // Scale based on drag
+  const scale = isDragging ? 1.02 : 1
 
   if (loading) {
     return (
@@ -100,7 +195,7 @@ export default function SwipeDeck() {
   const nextRecipe = recipes[currentIdx + 1]
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden px-4 py-4">
+    <div className="relative flex h-full flex-col overflow-hidden px-4 py-4 select-none">
       {/* Match notification */}
       {matchNotification && (
         <div className="mb-3 rounded-2xl bg-[#FFD93D] px-4 py-3 text-center shadow-sm">
@@ -128,16 +223,44 @@ export default function SwipeDeck() {
         )}
 
         {/* Current card */}
-        <div className="relative h-full rounded-[1.5rem] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden">
+        <div
+          ref={cardRef}
+          className="relative h-full rounded-[1.5rem] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden cursor-grab active:cursor-grabbing touch-none"
+          style={{
+            transform: `translateX(${dragX}px) translateY(${dragY * 0.3}px) rotate(${rotation}deg) scale(${scale})`,
+            transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseLeave}
+        >
+          {/* Swipe indicators */}
+          <div
+            className="absolute top-8 left-6 z-20 border-4 border-[#FF6B4A] text-[#FF6B4A] font-bold text-2xl px-4 py-1 rounded-lg tracking-widest uppercase"
+            style={{ opacity: nopeOpacity, transform: `rotate(${rotation * 0.5}deg)` }}
+          >
+            NOPE
+          </div>
+          <div
+            className="absolute top-8 right-6 z-20 border-4 border-[#4ECDC4] text-[#4ECDC4] font-bold text-2xl px-4 py-1 rounded-lg tracking-widest uppercase"
+            style={{ opacity: likeOpacity, transform: `rotate(${rotation * 0.5}deg)` }}
+          >
+            LIKE
+          </div>
+
           {/* Image (55% height) */}
           <div className="relative h-[55%] w-full">
             {recipe.image_url ? (
               <img
                 src={recipe.image_url}
                 alt={recipe.title}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover pointer-events-none"
+                draggable={false}
                 onError={(e) => {
-                  console.error('Image failed to load:', recipe.image_url)
                   e.currentTarget.style.display = 'none'
                 }}
               />
@@ -146,10 +269,10 @@ export default function SwipeDeck() {
                 <ChefHat size={48} className="text-[#8C8C8C]" />
               </div>
             )}
-            
+
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-            
+
             {/* Time badge */}
             <div className="absolute top-4 left-4 flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-3 py-1.5">
               <Clock size={14} className="text-[#2D2D2D]" />
@@ -191,18 +314,18 @@ export default function SwipeDeck() {
               </p>
             </div>
 
-            {/* Action buttons */}
+            {/* Action buttons - also work as tap */}
             <div className="flex items-center justify-center gap-6 mt-4">
               <button
-                onClick={() => handleSwipe('left')}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-white border-2 border-[#E8E8E8] shadow-lg active:scale-95"
+                onClick={(e) => { e.stopPropagation(); finishSwipe('left'); }}
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-white border-2 border-[#E8E8E8] shadow-lg active:scale-95 transition-transform"
               >
                 <X size={24} className="text-[#8C8C8C]" />
               </button>
-              
+
               <button
-                onClick={() => handleSwipe('right')}
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/30 active:scale-95"
+                onClick={(e) => { e.stopPropagation(); finishSwipe('right'); }}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/30 active:scale-95 transition-transform"
               >
                 <Heart size={28} className="text-white" fill="white" />
               </button>
@@ -212,7 +335,7 @@ export default function SwipeDeck() {
       </div>
 
       <p className="text-center text-xs text-[#8C8C8C] mt-3">
-        Tap ❤️ to like · Tap ✕ to pass
+        Swipe right to like · Swipe left to pass · Or tap buttons
       </p>
     </div>
   )
