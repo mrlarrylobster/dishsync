@@ -98,6 +98,16 @@ export async function getMatches() {
   return res.json()
 }
 
+export async function updateMatchStatus(match_id: string, status: string) {
+  const res = await fetch(`${API_BASE}/matches/${match_id}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) throw new Error('Failed to update match')
+  return res.json()
+}
+
 /* ─── Calendar ─── */
 
 export async function getCalendar() {
@@ -164,5 +174,56 @@ export async function checkGroceryItem(item_id: string, is_checked: boolean) {
     body: JSON.stringify({ item_id, is_checked }),
   })
   if (!res.ok) throw new Error('Failed to update item')
+  return res.json()
+}
+
+export async function exportGroceryList() {
+  const res = await fetch(`${API_BASE}/grocery/export`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to export grocery list')
+  return res.json()
+}
+
+/* ─── Recipe Image ─── */
+
+export async function getRecipeImageUrl(recipe_id: string) {
+  const res = await fetch(`${API_BASE}/recipes/${recipe_id}/image`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to get image')
+  const data = await res.json()
+  return data.image_url
+}
+
+/* ─── Veto ─── */
+
+export async function requestVeto(day: string) {
+  const res = await fetch(`${API_BASE}/calendar/${day}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to request veto')
+  return res.json()
+}
+
+export async function resolveVeto(veto_id: string, approve: boolean) {
+  const res = await fetch(`${API_BASE}/vetos/${veto_id}/resolve`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approve }),
+  })
+  if (!res.ok) throw new Error('Failed to resolve veto')
+  return res.json()
+}
+
+/* ─── Pantry Decay ─── */
+
+export async function triggerPantryDecay() {
+  const res = await fetch(`${API_BASE}/pantry/decay`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to trigger decay')
   return res.json()
 }

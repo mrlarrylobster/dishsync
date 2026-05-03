@@ -711,3 +711,135 @@ def request_veto(day: str, user: User = Depends(get_current_user), db: Session =
     db.commit()
     
     return {"veto_id": veto.id, "status": "pending", "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat()}
+
+
+@app.post("/vetos/{veto_id}/resolve")
+def resolve_veto(veto_id: str, payload: VetoResolve, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    veto = db.query(VetoRequest).filter(VetoRequest.id == veto_id, VetoRequest.couple_id == couple.id).first()
+    if not veto:
+        raise HTTPException(status_code=404, detail="Veto not found")
+    if veto.status != "pending":
+        raise HTTPException(status_code=409, detail="Veto already resolved")
+    if veto.requesting_partner_id == user.id:
+        raise HTTPException(status_code=403, detail="Cannot resolve your own veto")
+    
+    veto.status = "approved" if payload.approve else "rejected"
+    veto.resolved_at = datetime.utcnow()
+    
+    if payload.approve:
+        # Remove the match from the calendar day
+        cal = db.query(WeeklyCalendar).filter(WeeklyCalendar.id == veto.calendar_id).first()
+        if cal:
+            day_field = f"{veto.day}_match_id"
+            match_id = getattr(cal, day_field)
+            setattr(cal, day_field, None)
+            # Update match status
+            match = db.query(Match).filter(Match.id == match_id).first()
+            if match:
+                match.status = "removed"
+    
+    db.commit()
+    return {"ok": True, "status": veto.status}
+
+
+# ─── Match Status ───
+@app.patch("/matches/{match_id}")
+def update_match_status(match_id: str, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    match = db.query(Match).filter(Match.id == match_id, Match.couple_id == couple.id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    new_status = payload.get("status")
+    if new_status not in ["pending", "scheduled", "cooked", "removed"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    match.status = new_status
+    
+    if new_status == "cooked":
+        # Decrement pantry items
+        recipe = db.query(Recipe).filter(Recipe.id == match.recipe_id).first()
+        if recipe:
+            for ing in recipe.ingredients:
+                pantry_item = db.query(PantryItem).filter(
+                    PantryItem.couple_id == couple.id,
+                    PantryItem.ingredient_name == ing.name,
+                ).first()
+                if pantry_item:
+                    pantry_item.quantity = max(0, (pantry_item.quantity or 0) - (ing.quantity or 0))
+                    if pantry_item.quantity <= 0:
+                        pantry_item.confidence = 0.0
+    
+    db.commit()
+    return {"ok": True, "status": match.status}
+
+
+# ─── Recipe Image Proxy ───
+@app.get("/recipes/{recipe_id}/image")
+def get_recipe_image(recipe_id: str, db: Session = Depends(get_db)):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Return Spoonacular image URL directly for MVP (proxy via backend)
+    if recipe.image_url:
+        return {"image_url": recipe.image_url}
+    
+    # Fallback: construct Spoonacular image URL from ID
+    if recipe.spoonacular_id:
+        return {"image_url": f"https://spoonacular.com/recipeImages/{recipe.spoonacular_id}-556x370.jpg"}
+    
+    raise HTTPException(status_code=404, detail="No image available")
+
+
+# ─── Grocery Export ───
+@app.get("/grocery/export")
+def export_grocery(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    
+    if not gl:
+        raise HTTPException(status_code=404, detail="No grocery list found")
+    
+    lines = ["🛒 DishSync Grocery List", f"Week of {week_start}", ""]
+    
+    # Group by category
+    by_category = {}
+    for item in gl.items:
+        cat = item.category or "Other"
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(item)
+    
+    for cat, items in sorted(by_category.items()):
+        lines.append(f"\n{cat.upper()}")
+        for item in items:
+            status = "[x]" if item.is_checked else "[ ]"
+            qty = f"{item.quantity} {item.unit}" if item.quantity else ""
+            lines.append(f"  {status} {item.ingredient_name} {qty}")
+    
+    return {"text": "\n".join(lines)}
+
+
+# ─── Pantry Decay (Manual Trigger for MVP) ───
+@app.post("/pantry/decay")
+def trigger_pantry_decay(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    items = db.query(PantryItem).filter(PantryItem.couple_id == couple.id).all()
+    
+    decayed = 0
+    for item in items:
+        if item.is_perishable and item.confidence > 0:
+            item.confidence -= item.decay_rate
+            item.confidence = max(0.0, item.confidence)
+            decayed += 1
+    
+    db.commit()
+    return {"decayed_items": decayed, "message": f"Applied decay to {decayed} perishable items"}
