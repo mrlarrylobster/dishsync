@@ -32,10 +32,17 @@ interface DayData {
   }
 }
 
-// Drag handle component — only the GripVertical icon is draggable
-function DragHandle({ matchId }: { matchId: string }) {
+// Draggable card — entire card is the drag handle
+function DraggableCard({
+  dayData,
+  onTap,
+}: {
+  dayData: DayData
+  onTap: () => void
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: matchId,
+    id: dayData.id,
+    data: { dayData },
   })
 
   return (
@@ -43,26 +50,14 @@ function DragHandle({ matchId }: { matchId: string }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`p-2 rounded-lg touch-none ${
-        isDragging ? 'opacity-50' : ''
+      className={`flex items-center gap-3 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm select-none ${
+        isDragging ? 'opacity-40' : 'opacity-100'
       }`}
       style={{ touchAction: 'none' }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={onTap}
     >
       <GripVertical size={18} className="text-[#8C8C8C] shrink-0" />
-    </div>
-  )
-}
 
-// Meal card — tap body to open modal, drag handle to move
-function MealCard({ dayData, onClick }: { dayData: DayData; onClick: () => void }) {
-  return (
-    <div
-      className="flex items-center gap-2 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm cursor-pointer active:scale-[0.98] transition-transform"
-      onClick={onClick}
-    >
-      <DragHandle matchId={dayData.id} />
-      
       {dayData.recipe.image_url ? (
         <img
           src={dayData.recipe.image_url}
@@ -75,7 +70,7 @@ function MealCard({ dayData, onClick }: { dayData: DayData; onClick: () => void 
           <Clock size={14} className="text-[#8C8C8C]" />
         </div>
       )}
-      
+
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[#2D2D2D] truncate">
           {dayData.recipe.title}
@@ -131,9 +126,9 @@ function DaySlot({
       </div>
 
       {dayData ? (
-        <MealCard
+        <DraggableCard
           dayData={dayData}
-          onClick={() => onClickRecipe(dayData.recipe)}
+          onTap={() => onClickRecipe(dayData.recipe)}
         />
       ) : (
         <div
@@ -153,15 +148,15 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<any>(null)
-  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const [activeDragData, setActiveDragData] = useState<DayData | null>(null)
 
-  // Touch + pointer sensors for mobile & desktop
+  // Touch + pointer sensors — delay distinguishes tap from drag
   const sensors = useSensors(
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
+      activationConstraint: { delay: 250, tolerance: 8 },
     }),
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 3 },
+      activationConstraint: { distance: 8 },
     })
   )
 
@@ -212,12 +207,13 @@ export default function CalendarView() {
   }
 
   function handleDragStart(event: DragStartEvent) {
-    setActiveDragId(event.active.id as string)
+    const data = event.active.data.current?.dayData as DayData
+    if (data) setActiveDragData(data)
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    setActiveDragId(null)
+    setActiveDragData(null)
 
     if (!over) return
 
@@ -230,11 +226,6 @@ export default function CalendarView() {
 
     handleMove(matchId, fromDay, toDay)
   }
-
-  // Get the data for the currently dragged item (for DragOverlay)
-  const activeDragData = activeDragId
-    ? DAYS.map((d) => calendar?.[d]).find((d) => d?.id === activeDragId)
-    : null
 
   if (loading) {
     return (
@@ -285,7 +276,7 @@ export default function CalendarView() {
 
         <DragOverlay dropAnimation={null}>
           {activeDragData ? (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-white border-2 border-[#4ECDC4] shadow-xl opacity-90 cursor-grabbing">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border-2 border-[#4ECDC4] shadow-xl opacity-90 select-none">
               <GripVertical size={18} className="text-[#4ECDC4] shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[#2D2D2D] truncate">
@@ -301,7 +292,7 @@ export default function CalendarView() {
       </DndContext>
 
       <p className="mt-4 text-center text-xs text-[#8C8C8C]">
-        Long-press the grip icon (⋮⋮) to drag. Tap card to view details.
+        Long-press a card to drag. Tap to view details.
       </p>
 
       <RecipeDetailModal
