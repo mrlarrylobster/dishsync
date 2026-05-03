@@ -5,11 +5,16 @@ from sqlalchemy.orm import Session, joinedload
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, date
+from dotenv import load_dotenv
+import os
+
+# Load .env from backend directory
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+load_dotenv(env_path)
+
 import uuid
 import secrets
 import httpx
-import os
-
 from app.db import get_db, init_db
 from app.models import User, Couple, Recipe, RecipeIngredient, Swipe, Match, WeeklyCalendar, PantryItem, GroceryList, GroceryItem, VetoRequest
 from app.schemas import (

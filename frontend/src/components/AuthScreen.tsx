@@ -35,8 +35,8 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
         <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[#FF6B4A]/10 text-4xl shadow-sm">
           <Heart className="text-[#FF6B4A]" size={40} />
         </div>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#2D2D2D]">DishSync</h1>
-        <p className="mt-1 text-sm text-[#8C8C8C]">Cook together. Stay in sync.</p>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#2D2D2D]">DishPair</h1>
+        <p className="mt-1 text-sm text-[#8C8C8C]">Stop negotiating dinner. Start matching on it.</p>
       </div>
 
       <div className="w-full max-w-[360px] rounded-[1.5rem] border border-[#FF6B4A]/10 bg-white p-6 shadow-[0_16px_48px_rgba(255,107,74,0.08)]">
