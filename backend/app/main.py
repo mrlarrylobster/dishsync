@@ -325,6 +325,7 @@ def _recipe_to_read(recipe: Recipe) -> dict:
         "total_time_minutes": recipe.total_time_minutes,
         "active_time_minutes": recipe.active_time_minutes,
         "tags": recipe.tags or [],
+        "instructions": recipe.instructions or [],
         "ingredients": [
             {
                 "name": i.name,

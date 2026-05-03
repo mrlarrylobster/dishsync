@@ -17,6 +17,7 @@ interface Recipe {
   total_time_minutes: number
   tags: string[]
   ingredients: Ingredient[]
+  instructions?: string[]
   is_stretch?: boolean
   stretch_minutes?: number
 }
@@ -126,6 +127,23 @@ export default function RecipeDetailModal({ recipe, onClose, synergy }: RecipeDe
               </div>
             ))}
           </div>
+
+          {/* Instructions */}
+          {recipe.instructions && recipe.instructions.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-[#8C8C8C] uppercase tracking-wider mb-3">Instructions</h3>
+              <div className="space-y-3">
+                {recipe.instructions.map((step, idx) => (
+                  <div key={idx} className="flex gap-3">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FF6B4A] text-xs font-bold text-white">
+                      {idx + 1}
+                    </div>
+                    <p className="text-sm text-[#2D2D2D] leading-relaxed pt-0.5">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Description if available */}
           {recipe.description && (

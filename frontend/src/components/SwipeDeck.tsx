@@ -11,6 +11,7 @@ interface Recipe {
   total_time_minutes: number
   tags: string[]
   ingredients: { name: string; category: string }[]
+  instructions?: string[]
   is_stretch: boolean
   stretch_minutes: number
 }
