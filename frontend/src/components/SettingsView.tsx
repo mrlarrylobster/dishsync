@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users, Copy, Check, Clock, Loader2, Save, RotateCcw, AlertTriangle } from 'lucide-react'
 import { getCouple, updateCouple, resetCoupleData } from '../lib/api'
 
-export default function SettingsView() {
+export default function SettingsView({ onSignOut }: { onSignOut: () => void }) {
   const [couple, setCouple] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -224,6 +224,15 @@ export default function SettingsView() {
             </div>
           </div>
         )}
+      </div>
+      {/* Sign Out */}
+      <div className="mt-6 rounded-2xl bg-white border border-[#F0E6E0] p-4 shadow-sm">
+        <button
+          onClick={onSignOut}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#E8E8E8] py-2.5 text-sm font-semibold text-[#8C8C8C] active:scale-95 hover:bg-[#F0E6E0]"
+        >
+          Sign Out
+        </button>
       </div>
     </div>
   )

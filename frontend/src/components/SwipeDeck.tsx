@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart, X, Clock, Flame, ChefHat, Loader2, Sparkles, Info } from 'lucide-react'
+import { Heart, X, Clock, Flame, ChefHat, Loader2, Sparkles, Info, ArrowRight, ArrowLeft } from 'lucide-react'
 import { getRecipeFeed, swipeRecipe } from '../lib/api'
 import RecipeDetailModal from './RecipeDetailModal'
 
@@ -16,7 +16,7 @@ interface Recipe {
   stretch_minutes: number
 }
 
-// Common pantry staples most households already have
+// Common pantry staples
 const PANTRY_STAPLES = [
   'salt', 'pepper', 'oil', 'olive oil', 'vegetable oil', 'butter', 'garlic',
   'onion', 'egg', 'eggs', 'flour', 'sugar', 'milk', 'water', 'soy sauce',
@@ -40,13 +40,11 @@ function getPantryOverlap(ingredients: { name: string }[]): string[] {
     const nameLower = ing.name.toLowerCase()
     for (const staple of PANTRY_STAPLES) {
       if (nameLower.includes(staple.toLowerCase())) {
-        // Capitalize first letter for display
         overlap.push(ing.name)
         break
       }
     }
   }
-  // Deduplicate and limit to 4
   return [...new Set(overlap)].slice(0, 4)
 }
 
@@ -55,12 +53,41 @@ function PantrySynergyBadge({ ingredients }: { ingredients: { name: string }[] }
   if (overlap.length === 0) return null
 
   return (
-    <div
-      className="mt-2 mx-4 rounded-xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20 px-3 py-2"
-    >
+    <div className="mt-2 mx-4 rounded-xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20 px-3 py-2">
       <p className="text-xs text-[#2D2D2D]">
         <span className="font-semibold">🛒 Already have:</span> {overlap.join(', ')}
       </p>
+    </div>
+  )
+}
+
+// First-time hint overlay
+function SwipeHint({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-[1.5rem]">
+      <div className="flex items-center gap-8 mb-6">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
+            <ArrowLeft size={32} className="text-white" />
+          </div>
+          <span className="text-white text-sm font-semibold">Pass</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
+            <ArrowRight size={32} className="text-white" />
+          </div>
+          <span className="text-white text-sm font-semibold">Like</span>
+        </div>
+      </div>
+      <p className="text-white text-center px-8 mb-6">
+        Swipe left to pass, right to like.<br/>Tap the card for details.
+      </p>
+      <button
+        onClick={onDismiss}
+        className="px-6 py-2.5 rounded-full bg-white text-[#2D2D2D] text-sm font-semibold active:scale-95"
+      >
+        Got it
+      </button>
     </div>
   )
 }
@@ -73,6 +100,9 @@ export default function SwipeDeck() {
   const [recycled, setRecycled] = useState(false)
   const [matchNotification, setMatchNotification] = useState<string | null>(null)
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
+  const [showHint, setShowHint] = useState(() => {
+    return !localStorage.getItem('dishpair_swipe_hint_seen')
+  })
 
   // Drag state
   const [dragX, setDragX] = useState(0)
@@ -81,6 +111,7 @@ export default function SwipeDeck() {
   const startXRef = useRef(0)
   const startYRef = useRef(0)
   const cardRef = useRef<HTMLDivElement>(null)
+  const tapStartTime = useRef(0)
 
   useEffect(() => {
     loadRecipes()
@@ -107,7 +138,6 @@ export default function SwipeDeck() {
     if (currentIdx >= recipes.length) return
     const recipe = recipes[currentIdx]
 
-    // Animate card flying off
     const flyX = dir === 'right' ? window.innerWidth + 200 : -(window.innerWidth + 200)
     setDragX(flyX)
     setDragY(0)
@@ -133,11 +163,11 @@ export default function SwipeDeck() {
     }, 300)
   }, [currentIdx, recipes])
 
-  // Touch / mouse handlers
   const handleStart = useCallback((clientX: number, clientY: number) => {
     setIsDragging(true)
     startXRef.current = clientX
     startYRef.current = clientY
+    tapStartTime.current = Date.now()
   }, [])
 
   const handleMove = useCallback((clientX: number, clientY: number) => {
@@ -154,27 +184,28 @@ export default function SwipeDeck() {
 
     const threshold = 100
     const tapThreshold = 10
+    const tapTimeLimit = 250
     const totalDrag = Math.sqrt(dragX * dragX + dragY * dragY)
-    
-    // Tap detection: small movement = open detail
-    if (totalDrag < tapThreshold) {
+    const elapsed = Date.now() - tapStartTime.current
+
+    // Tap detection: small movement + short time = open modal
+    if (totalDrag < tapThreshold && elapsed < tapTimeLimit) {
       setDragX(0)
       setDragY(0)
+      // Don't open modal here - let the dedicated button handle it
       return
     }
-    
+
     if (dragX > threshold) {
       finishSwipe('right')
     } else if (dragX < -threshold) {
       finishSwipe('left')
     } else {
-      // Snap back
       setDragX(0)
       setDragY(0)
     }
   }, [isDragging, dragX, dragY, finishSwipe])
 
-  // Touch events
   const onTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0]
     handleStart(touch.clientX, touch.clientY)
@@ -186,11 +217,8 @@ export default function SwipeDeck() {
     handleMove(touch.clientX, touch.clientY)
   }
 
-  const onTouchEnd = () => {
-    handleEnd()
-  }
+  const onTouchEnd = () => { handleEnd() }
 
-  // Mouse events
   const onMouseDown = (e: React.MouseEvent) => {
     handleStart(e.clientX, e.clientY)
   }
@@ -202,24 +230,15 @@ export default function SwipeDeck() {
     }
   }
 
-  const onMouseUp = () => {
-    handleEnd()
-  }
+  const onMouseUp = () => { handleEnd() }
 
   const onMouseLeave = () => {
-    if (isDragging) {
-      handleEnd()
-    }
+    if (isDragging) handleEnd()
   }
 
-  // Rotation based on drag distance
   const rotation = dragX * 0.08
-
-  // Opacity of swipe indicators
   const likeOpacity = Math.min(Math.max(dragX / 150, 0), 1)
   const nopeOpacity = Math.min(Math.max(-dragX / 150, 0), 1)
-
-  // Scale based on drag
   const scale = isDragging ? 1.02 : 1
 
   if (loading) {
@@ -245,12 +264,26 @@ export default function SwipeDeck() {
   if (currentIdx >= recipes.length) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6">
-        <ChefHat size={48} className="mb-4 text-[#8C8C8C]" />
-        <h2 className="text-lg font-bold text-[#2D2D2D]">No more recipes</h2>
-        <p className="mt-2 text-sm text-[#8C8C8C]">Check back tomorrow for fresh dishes!</p>
-        <button onClick={loadRecipes} className="mt-4 rounded-2xl bg-[#FF6B4A] px-6 py-2.5 text-sm font-semibold text-white">
-          Refresh Deck
+        <div className="w-24 h-24 rounded-full bg-[#FFD93D]/20 flex items-center justify-center mb-4">
+          <Sparkles size={40} className="text-[#FFD93D]" />
+        </div>
+        <h2 className="text-lg font-bold text-[#2D2D2D]">You've seen everything!</h2>
+        <p className="mt-2 text-sm text-[#8C8C8C] text-center">
+          {recycled
+            ? "You've cycled through all recipes. Check back tomorrow for fresh dishes!"
+            : "Great swiping! Head to the Plan tab to schedule your matches."}
+        </p>
+        <button onClick={loadRecipes} className="mt-6 rounded-2xl bg-[#FF6B4A] px-6 py-2.5 text-sm font-semibold text-white active:scale-95">
+          {recycled ? 'Browse Again' : 'Refresh Deck'}
         </button>
+        {!recycled && (
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'plan' }))}
+            className="mt-3 text-sm font-semibold text-[#4ECDC4]"
+          >
+            Go to Plan →
+          </button>
+        )}
       </div>
     )
   }
@@ -298,7 +331,7 @@ export default function SwipeDeck() {
         {/* Current card */}
         <div
           ref={cardRef}
-          className="relative h-full rounded-[1.5rem] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden cursor-grab active:cursor-grabbing touch-none"
+          className="relative h-full rounded-[1.5rem] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden touch-none"
           style={{
             transform: `translateX(${dragX}px) translateY(${dragY * 0.3}px) rotate(${rotation}deg) scale(${scale})`,
             transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
@@ -311,6 +344,9 @@ export default function SwipeDeck() {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseLeave}
         >
+          {/* First-time hint overlay */}
+          {showHint && <SwipeHint onDismiss={() => { setShowHint(false); localStorage.setItem('dishpair_swipe_hint_seen', 'true') }} />}
+
           {/* Swipe indicators */}
           <div
             className="absolute top-8 left-6 z-20 border-4 border-[#FF6B4A] text-[#FF6B4A] font-bold text-2xl px-4 py-1 rounded-lg tracking-widest uppercase"
@@ -326,27 +362,20 @@ export default function SwipeDeck() {
           </div>
 
           {/* Image (55% height) */}
-          <div 
-            className="relative h-[55%] w-full cursor-pointer"
-            onClick={() => {
-              // Only open if not dragging
-              if (!isDragging && Math.abs(dragX) < 5) {
-                setSelectedRecipe(recipe)
-              }
-            }}
-          >
+          <div className="relative h-[55%] w-full">
             {recipe.image_url ? (
               <img
                 src={recipe.image_url}
                 alt={recipe.title}
                 className="h-full w-full object-cover"
                 draggable={false}
+                loading="lazy"
                 onError={(e) => {
                   const target = e.currentTarget
                   target.style.display = 'none'
                   const parent = target.parentElement
                   if (parent) {
-                    parent.className = 'relative h-[55%] w-full cursor-pointer flex items-center justify-center bg-[#FFFBF7]'
+                    parent.className = 'relative h-[55%] w-full flex items-center justify-center bg-[#FFFBF7]'
                   }
                 }}
               />
@@ -372,14 +401,6 @@ export default function SwipeDeck() {
                 <span className="text-xs font-semibold text-white">+{recipe.stretch_minutes} min stretch</span>
               </div>
             )}
-
-            {/* Info button */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setSelectedRecipe(recipe); }}
-              className="absolute top-4 right-1/2 translate-x-1/2 z-20 p-2 rounded-full bg-white/90 backdrop-blur shadow-md active:scale-95"
-            >
-              <Info size={16} className="text-[#2D2D2D]" />
-            </button>
 
             {/* Title on image */}
             <div className="absolute bottom-4 left-4 right-4">
@@ -411,18 +432,31 @@ export default function SwipeDeck() {
               </p>
             </div>
 
-            {/* Action buttons - also work as tap */}
+            {/* Action buttons */}
             <div className="flex items-center justify-center gap-6 mt-4">
+              {/* Pass button */}
               <button
                 onClick={(e) => { e.stopPropagation(); finishSwipe('left'); }}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-white border-2 border-[#E8E8E8] shadow-lg active:scale-95 transition-transform"
+                aria-label="Pass"
               >
                 <X size={24} className="text-[#8C8C8C]" />
               </button>
 
+              {/* Info button (tap to open modal) */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedRecipe(recipe); }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-white border-2 border-[#E8E8E8] shadow-lg active:scale-95 transition-transform"
+                aria-label="View recipe details"
+              >
+                <Info size={20} className="text-[#8C8C8C]" />
+              </button>
+
+              {/* Like button */}
               <button
                 onClick={(e) => { e.stopPropagation(); finishSwipe('right'); }}
                 className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/30 active:scale-95 transition-transform"
+                aria-label="Like"
               >
                 <Heart size={28} className="text-white" fill="white" />
               </button>
@@ -432,13 +466,13 @@ export default function SwipeDeck() {
       </div>
 
       <p className="text-center text-xs text-[#8C8C8C] mt-3">
-        Swipe right to like · Swipe left to pass · Or tap buttons
+        Swipe right to like · Swipe left to pass · Tap info for details
       </p>
 
       {/* Recipe Detail Modal */}
-      <RecipeDetailModal 
-        recipe={selectedRecipe} 
-        onClose={() => setSelectedRecipe(null)} 
+      <RecipeDetailModal
+        recipe={selectedRecipe}
+        onClose={() => setSelectedRecipe(null)}
       />
     </div>
   )

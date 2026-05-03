@@ -32,7 +32,7 @@ interface RecipeDetailModalProps {
   }
 }
 
-export default function RecipeDetailModal({ recipe, onClose, synergy }: RecipeDetailModalProps) {
+export default function RecipeDetailModal({ recipe, onClose, synergy, onSchedule }: RecipeDetailModalProps & { onSchedule?: (recipe: Recipe) => void }) {
   if (!recipe) return null
 
   const categories = [...new Set(recipe.ingredients.map(i => i.category))]
@@ -119,7 +119,7 @@ export default function RecipeDetailModal({ recipe, onClose, synergy }: RecipeDe
                       <div key={idx} className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white border border-[#F0E6E0]">
                         <span className="text-sm text-[#2D2D2D]">{ing.name}</span>
                         <span className="text-xs text-[#8C8C8C]">
-                          {ing.quantity ? `${ing.quantity} ${ing.unit || ''}` : ing.original_name}
+                          {ing.quantity ? `${ing.quantity} ${ing.unit || ''}` : ing.original_name || ''}
                         </span>
                       </div>
                     ))}
@@ -151,6 +151,15 @@ export default function RecipeDetailModal({ recipe, onClose, synergy }: RecipeDe
               <h3 className="text-sm font-bold text-[#8C8C8C] uppercase tracking-wider mb-2">About</h3>
               <p className="text-sm text-[#2D2D2D] leading-relaxed">{recipe.description}</p>
             </div>
+          )}
+          {/* Schedule action */}
+          {onSchedule && (
+            <button
+              onClick={() => { onSchedule(recipe); onClose(); }}
+              className="mt-2 w-full rounded-2xl bg-[#FF6B4A] py-3 text-sm font-semibold text-white active:scale-95 shadow-lg shadow-[#FF6B4A]/20"
+            >
+              📅 Schedule This Meal
+            </button>
           )}
         </div>
       </div>

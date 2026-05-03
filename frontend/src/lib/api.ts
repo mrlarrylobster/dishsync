@@ -284,3 +284,35 @@ export async function resetCoupleData() {
   if (!res.ok) throw new Error('Failed to reset')
   return res.json()
 }
+
+/* ─── Pantry Delete ─── */
+
+export async function deletePantryItem(item_id: string) {
+  const res = await fetch(`${API_BASE}/pantry/${item_id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to delete pantry item')
+  return res.json()
+}
+
+/* ─── Grocery Bulk ─── */
+
+export async function clearCheckedGroceryItems() {
+  const res = await fetch(`${API_BASE}/grocery/clear-checked`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to clear checked items')
+  return res.json()
+}
+
+export async function markAllGroceryItems(checked: boolean) {
+  const res = await fetch(`${API_BASE}/grocery/mark-all`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checked }),
+  })
+  if (!res.ok) throw new Error('Failed to mark all items')
+  return res.json()
+}

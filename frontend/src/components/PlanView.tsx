@@ -125,6 +125,7 @@ export default function PlanView() {
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [activeDragMatch, setActiveDragMatch] = useState<Match | null>(null)
+  const [flashMessage, setFlashMessage] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
@@ -183,6 +184,8 @@ export default function PlanView() {
   async function handleMove(matchId: string, fromDay: string, toDay: string) {
     try {
       await moveMatch(matchId, fromDay, toDay)
+      setFlashMessage(`Moved to ${toDay.charAt(0).toUpperCase() + toDay.slice(1)} ✓`)
+      setTimeout(() => setFlashMessage(null), 2000)
       loadData()
     } catch (err) {
       console.error('Move failed:', err)
@@ -192,6 +195,8 @@ export default function PlanView() {
   async function handleSchedule(matchId: string, day: string) {
     try {
       await scheduleMatch(matchId, day)
+      setFlashMessage(`Scheduled for ${day.charAt(0).toUpperCase() + day.slice(1)} ✓`)
+      setTimeout(() => setFlashMessage(null), 2000)
       loadData()
     } catch (err) {
       console.error('Schedule failed:', err)
@@ -245,6 +250,13 @@ export default function PlanView() {
 
   return (
     <div className="px-4 py-4">
+      {/* Flash message */}
+      {flashMessage && (
+        <div className="mb-3 rounded-2xl bg-[#6BCB77] px-4 py-2 text-center shadow-sm animate-pulse">
+          <p className="text-sm font-bold text-white">{flashMessage}</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-[#2D2D2D]">Weekly Plan</h2>
         <button

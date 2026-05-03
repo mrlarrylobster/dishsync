@@ -598,6 +598,73 @@ def delete_match(match_id: str, user: User = Depends(get_current_user), db: Sess
     return {"ok": True, "message": "Match deleted"}
 
 
+# ─── Pantry ───
+
+@app.get("/pantry")
+def get_pantry(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    items = db.query(PantryItem).filter(PantryItem.couple_id == couple.id).all()
+    return {
+        "items": [
+            {
+                "id": i.id,
+                "ingredient_name": i.ingredient_name,
+                "quantity": i.quantity,
+                "unit": i.unit,
+                "confidence": i.confidence,
+                "last_verified": i.last_verified.isoformat(),
+                "category": i.category,
+            }
+            for i in items
+        ],
+    }
+
+
+@app.post("/pantry")
+def add_pantry_item(payload: PantryItemCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    item = PantryItem(
+        id=str(uuid.uuid4()),
+        couple_id=couple.id,
+        ingredient_name=payload.ingredient_name,
+        quantity=payload.quantity,
+        unit=payload.unit,
+        category=payload.category,
+        confidence=1.0,
+        last_verified=datetime.utcnow(),
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return {"id": item.id, "ingredient_name": item.ingredient_name}
+
+
+@app.delete("/pantry/{item_id}")
+def delete_pantry_item(item_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    item = db.query(PantryItem).filter(
+        PantryItem.id == item_id,
+        PantryItem.couple_id == couple.id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/pantry/decay")
+def decay_pantry(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Reduce confidence of all pantry items over time."""
+    couple = get_couple_for_user(user, db)
+    items = db.query(PantryItem).filter(PantryItem.couple_id == couple.id).all()
+    for item in items:
+        days_since = (datetime.utcnow() - item.last_verified).days
+        item.confidence = max(0.1, item.confidence - (days_since * 0.05))
+    db.commit()
+    return {"decayed": len(items)}
+
+
 # ─── Calendar ───
 def _get_or_create_calendar(couple_id: str, week_start: date, db: Session) -> WeeklyCalendar:
     cal = db.query(WeeklyCalendar).filter(
@@ -1127,6 +1194,44 @@ def check_grocery_item(payload: GroceryCheckItem, user: User = Depends(get_curre
     
     db.commit()
     return {"ok": True}
+
+
+@app.post("/grocery/clear-checked")
+def clear_checked_grocery(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    if not gl:
+        return {"cleared": 0}
+    count = db.query(GroceryItem).filter(
+        GroceryItem.grocery_list_id == gl.id,
+        GroceryItem.is_checked == True,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"cleared": count}
+
+
+@app.post("/grocery/mark-all")
+def mark_all_grocery(payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    if not gl:
+        return {"updated": 0}
+    checked = payload.get("checked", True)
+    items = db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).all()
+    for item in items:
+        item.is_checked = checked
+    db.commit()
+    return {"updated": len(items)}
 
 
 # ─── Veto ───
