@@ -341,6 +341,9 @@ def _recipe_to_read(recipe: Recipe) -> dict:
     }
 
 
+# ─── Days ───
+DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
 # Spoonacular rate limit tracking
 _last_spoonacular_error = 0
 SPOONACULAR_COOLDOWN_SECONDS = 3600  # 1 hour cooldown after rate limit
