@@ -19,14 +19,12 @@ export function BottomSheet({ isOpen, onClose, children, title }: BottomSheetPro
       document.body.style.overflow = 'hidden'
     } else {
       setAnimating(false)
-      const timer = setTimeout(() => {
-        setVisible(false)
-        document.body.style.overflow = ''
-      }, 300)
-      return () => {
-        clearTimeout(timer)
-        document.body.style.overflow = ''
-      }
+      const timer = setTimeout(() => setVisible(false), 300)
+      return () => clearTimeout(timer)
+    }
+    // Cleanup: always restore scroll when effect re-runs or unmounts
+    return () => {
+      document.body.style.overflow = ''
     }
   }, [isOpen])
 
