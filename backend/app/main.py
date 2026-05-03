@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
@@ -7,14 +7,15 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 import os
+import uuid
+import secrets
+import httpx
+import asyncio
 
 # Load .env from backend directory
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
 load_dotenv(env_path)
 
-import uuid
-import secrets
-import httpx
 from app.db import get_db, init_db
 from app.models import User, Couple, Recipe, RecipeIngredient, Swipe, Match, WeeklyCalendar, PantryItem, GroceryList, GroceryItem, VetoRequest
 from app.schemas import (
@@ -31,7 +32,7 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7
 SPOONACULAR_API_KEY = os.environ.get("SPOONACULAR_API_KEY", "")
 
 # ─── Init ───
-app = FastAPI(title="DishSync API")
+app = FastAPI(title="DishPair API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,6 +40,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── WebSocket Connection Manager ───
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}  # couple_id -> [websockets]
+    
+    async def connect(self, couple_id: str, websocket: WebSocket):
+        await websocket.accept()
+        if couple_id not in self.active_connections:
+            self.active_connections[couple_id] = []
+        self.active_connections[couple_id].append(websocket)
+    
+    def disconnect(self, couple_id: str, websocket: WebSocket):
+        if couple_id in self.active_connections:
+            self.active_connections[couple_id].remove(websocket)
+            if not self.active_connections[couple_id]:
+                del self.active_connections[couple_id]
+    
+    async def broadcast_to_couple(self, couple_id: str, message: dict):
+        if couple_id in self.active_connections:
+            for connection in self.active_connections[couple_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass  # Connection closed
+
+manager = ConnectionManager()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -77,6 +105,51 @@ def get_couple_for_user(user: User, db: Session) -> Couple:
     if not couple:
         raise HTTPException(status_code=404, detail="No couple found. Create or join one first.")
     return couple
+
+
+# ─── WebSocket ───
+@app.websocket("/ws/{token}")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=4001)
+            return
+    except JWTError:
+        await websocket.close(code=4001)
+        return
+    
+    # Get user's couple
+    from app.db import SessionLocal
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            await websocket.close(code=4001)
+            return
+        
+        couple = db.query(Couple).filter(
+            (Couple.partner_1_id == user.id) | (Couple.partner_2_id == user.id)
+        ).first()
+        
+        if not couple:
+            await websocket.close(code=4002)
+            return
+        
+        couple_id = couple.id
+    finally:
+        db.close()
+    
+    await manager.connect(couple_id, websocket)
+    try:
+        while True:
+            # Keep connection alive, listen for client pings
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        manager.disconnect(couple_id, websocket)
 
 
 # ─── Health ───
@@ -380,6 +453,17 @@ def create_swipe(payload: SwipeCreate, user: User = Depends(get_current_user), d
             db.add(match)
             db.commit()
             db.refresh(match)
+            
+            # Broadcast match reveal to couple via WebSocket
+            recipe = db.query(Recipe).filter(Recipe.id == payload.recipe_id).first()
+            partner = db.query(User).filter(User.id == partner_id).first()
+            asyncio.create_task(manager.broadcast_to_couple(couple.id, {
+                "type": "match.revealed",
+                "match_id": match.id,
+                "recipe": _recipe_to_read(recipe),
+                "partner_name": partner.display_name if partner else "Your partner",
+            }))
+            
             return {"id": swipe.id, "direction": swipe.direction, "match": {"id": match.id, "recipe_id": payload.recipe_id}}
     elif payload.direction == "right" and not couple.partner_2_id:
         # Single-user mode: auto-match
@@ -478,8 +562,8 @@ def auto_schedule(user: User = Depends(get_current_user), db: Session = Depends(
     week_start = today - timedelta(days=today.weekday())
     cal = _get_or_create_calendar(couple.id, week_start, db)
     
-    # Get pending matches
-    matches = db.query(Match).filter(
+    # Get pending matches with recipe details
+    matches = db.query(Match).options(joinedload(Match.recipe)).filter(
         Match.couple_id == couple.id,
         Match.status == "pending",
     ).all()
@@ -487,19 +571,168 @@ def auto_schedule(user: User = Depends(get_current_user), db: Session = Depends(
     if not matches:
         return {"scheduled": 0, "message": "No pending matches to schedule"}
     
-    # Simple greedy assignment: assign to first available day
+    # Get available days (not already scheduled)
     days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    assigned = 0
-    for match in matches:
-        for day in days:
-            if not getattr(cal, f"{day}_match_id"):
-                setattr(cal, f"{day}_match_id", match.id)
-                match.status = "scheduled"
-                assigned += 1
-                break
+    available_days = [day for day in days if not getattr(cal, f"{day}_match_id")]
     
-    db.commit()
-    return {"scheduled": assigned}
+    if len(matches) > len(available_days):
+        matches = matches[:len(available_days)]
+    
+    if len(matches) <= 7:
+        # Brute force all permutations for optimal assignment
+        from itertools import permutations
+        
+        best_score = float('-inf')
+        best_assignment = None
+        
+        for perm in permutations(matches):
+            score = _score_assignment(perm, couple, db)
+            if score > best_score:
+                best_score = score
+                best_assignment = perm
+        
+        # Apply best assignment
+        assigned = 0
+        for i, match in enumerate(best_assignment):
+            day = available_days[i]
+            setattr(cal, f"{day}_match_id", match.id)
+            match.status = "scheduled"
+            assigned += 1
+        
+        db.commit()
+        return {
+            "scheduled": assigned,
+            "algorithm": "brute_force_optimal",
+            "score": best_score,
+        }
+    else:
+        # Greedy fallback for >7 matches
+        assigned = 0
+        for match in matches:
+            for day in available_days:
+                if not getattr(cal, f"{day}_match_id"):
+                    setattr(cal, f"{day}_match_id", match.id)
+                    match.status = "scheduled"
+                    assigned += 1
+                    break
+        
+        db.commit()
+        return {"scheduled": assigned, "algorithm": "greedy"}
+
+
+def _score_assignment(matches, couple, db):
+    """Score a weekly assignment using multi-objective optimization."""
+    w1, w2, w3, w4 = 0.35, 0.30, 0.25, 0.10
+    
+    # 1. Ingredient Synergy (adjacent day overlap)
+    synergy = _ingredient_synergy(matches)
+    
+    # 2. Perishability Sequencing (fragile ingredients earlier)
+    perishability = _perishability_score(matches)
+    
+    # 3. Time Budget Compliance
+    budget = _time_budget_score(matches, couple.time_budget_minutes)
+    
+    # 4. Palate Variation (avoid same cuisine adjacent)
+    variation = _palate_variation(matches)
+    
+    return w1 * synergy + w2 * perishability + w3 * budget + w4 * variation
+
+
+def _ingredient_synergy(matches):
+    """Higher score when adjacent days share ingredients (lower grocery cost)."""
+    if len(matches) < 2:
+        return 1.0
+    
+    score = 0
+    for i in range(len(matches) - 1):
+        set_a = {ing.name for ing in matches[i].recipe.ingredients}
+        set_b = {ing.name for ing in matches[i+1].recipe.ingredients}
+        
+        if not set_a or not set_b:
+            continue
+            
+        # Jaccard similarity: intersection / union
+        intersection = len(set_a & set_b)
+        union = len(set_a | set_b)
+        
+        if union > 0:
+            score += intersection / union
+    
+    # Normalize by number of pairs
+    return score / (len(matches) - 1) if len(matches) > 1 else 1.0
+
+
+def _perishability_score(matches):
+    """Higher score when fragile ingredients are scheduled earlier."""
+    if not matches:
+        return 1.0
+    
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    score = 0
+    
+    for i, match in enumerate(matches):
+        # Day index: 0=Monday, 6=Sunday
+        day_idx = i
+        
+        # Get min shelf life among perishable ingredients
+        perishable_ings = [ing for ing in match.recipe.ingredients if ing.is_perishable]
+        if not perishable_ings:
+            score += 1.0  # No perishables = no penalty
+            continue
+        
+        min_shelf = min(ing.shelf_life_days or 7 for ing in perishable_ings)
+        
+        # Earlier in week = better for short shelf life
+        # If min_shelf < day_idx + 1, ingredient spoils before cooking
+        if min_shelf >= day_idx + 1:
+            score += 1.0
+        else:
+            # Penalty proportional to how much it spoils before cooking
+            score += max(0, min_shelf / (day_idx + 1))
+    
+    return score / len(matches)
+
+
+def _time_budget_score(matches, budget_minutes):
+    """Higher score when total time fits budget."""
+    if not matches or not budget_minutes:
+        return 1.0
+    
+    score = 0
+    for match in matches:
+        time = match.recipe.total_time_minutes or 60
+        if time <= budget_minutes:
+            score += 1.0
+        elif time <= budget_minutes * 1.5:
+            # Stretch zone: partial credit
+            score += 0.5
+        else:
+            score += 0.0
+    
+    return score / len(matches)
+
+
+def _palate_variation(matches):
+    """Higher score when adjacent days have different cuisines."""
+    if len(matches) < 2:
+        return 1.0
+    
+    score = 0
+    for i in range(len(matches) - 1):
+        tags_a = set(matches[i].recipe.tags or [])
+        tags_b = set(matches[i+1].recipe.tags or [])
+        
+        # Penalize shared cuisine tags
+        cuisine_tags = {"thai", "italian", "mexican", "indian", "chinese", "japanese", "french", "mediterranean"}
+        shared_cuisine = (tags_a & tags_b) & cuisine_tags
+        
+        if not shared_cuisine:
+            score += 1.0
+        else:
+            score += 0.5  # Partial penalty for shared cuisine
+    
+    return score / (len(matches) - 1)
 
 
 # ─── Pantry ───
