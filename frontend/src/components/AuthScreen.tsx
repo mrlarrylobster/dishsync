@@ -25,7 +25,7 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
       }
       const data = await login(email, password)
       haptic('success')
-      onLogin(data.access_token)
+      onLogin(data.token)
     } catch (err: any) {
       haptic('error')
       setError(err.message || 'Authentication failed')
