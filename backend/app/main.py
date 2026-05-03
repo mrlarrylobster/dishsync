@@ -529,14 +529,16 @@ def get_matches(user: User = Depends(get_current_user), db: Session = Depends(ge
         Match.couple_id == couple.id,
         Match.status.in_(["pending", "scheduled"]),
     ).all()
-    return {"matches": [
-        {
+    result = []
+    for m in matches:
+        if not m.recipe:
+            continue  # Skip orphaned matches (recipe was deleted)
+        result.append({
             "match_id": m.id,
             "status": m.status,
             **_recipe_to_read(m.recipe),
-        }
-        for m in matches
-    ]}
+        })
+    return {"matches": result}
 
 
 # ─── Calendar ───
