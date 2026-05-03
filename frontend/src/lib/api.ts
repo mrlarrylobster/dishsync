@@ -262,3 +262,14 @@ export async function triggerPantryDecay() {
   if (!res.ok) throw new Error('Failed to trigger decay')
   return res.json()
 }
+
+/* ─── Reset ─── */
+
+export async function resetCoupleData() {
+  const res = await fetch(`${API_BASE}/reset`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to reset')
+  return res.json()
+}

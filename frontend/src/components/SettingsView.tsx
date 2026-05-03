@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Users, Copy, Check, Clock, Loader2, Save } from 'lucide-react'
-import { getCouple, updateCouple } from '../lib/api'
+import { Users, Copy, Check, Clock, Loader2, Save, RotateCcw, AlertTriangle } from 'lucide-react'
+import { getCouple, updateCouple, resetCoupleData } from '../lib/api'
 
 export default function SettingsView() {
   const [couple, setCouple] = useState<any>(null)
@@ -8,6 +8,8 @@ export default function SettingsView() {
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [timeBudget, setTimeBudget] = useState(60)
+  const [resetting, setResetting] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   useEffect(() => {
     loadCouple()
@@ -35,6 +37,21 @@ export default function SettingsView() {
       console.error(err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleReset() {
+    setResetting(true)
+    try {
+      await resetCoupleData()
+      setShowResetConfirm(false)
+      // Refresh couple data
+      await loadCouple()
+    } catch (err) {
+      console.error(err)
+      alert('Reset failed. Please try again.')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -160,6 +177,52 @@ export default function SettingsView() {
           <p className="mt-3 pt-3 border-t border-[#F0E6E0] text-xs text-[#8C8C8C]">
             No partner linked yet. Share the invite code above.
           </p>
+        )}
+      </div>
+
+      {/* Reset */}
+      <div className="mt-6 rounded-2xl bg-white border border-[#F0E6E0] p-4 shadow-sm">
+        <label className="text-xs font-semibold uppercase tracking-wider text-[#8C8C8C] mb-2 block">
+          Reset
+        </label>
+        <p className="text-xs text-[#8C8C8C] mb-3">
+          Clear all matches, swipes, and calendar entries. Recipes will return to your swipe deck.
+        </p>
+        
+        {!showResetConfirm ? (
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 active:scale-95"
+          >
+            <RotateCcw size={16} />
+            Reset All Data
+          </button>
+        ) : (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={16} className="text-red-500" />
+              <p className="text-sm font-semibold text-red-700">Are you sure?</p>
+            </div>
+            <p className="text-xs text-red-600 mb-3">
+              This deletes all matches, swipes, and scheduled meals. Cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 rounded-xl bg-white border border-[#E8E8E8] py-2 text-sm font-medium text-[#8C8C8C] active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-50"
+              >
+                {resetting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                {resetting ? 'Resetting...' : 'Confirm Reset'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

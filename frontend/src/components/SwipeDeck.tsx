@@ -70,6 +70,7 @@ export default function SwipeDeck() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [recycled, setRecycled] = useState(false)
   const [matchNotification, setMatchNotification] = useState<string | null>(null)
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
@@ -91,6 +92,7 @@ export default function SwipeDeck() {
     try {
       const data = await getRecipeFeed(20)
       setRecipes(data.recipes || [])
+      setRecycled(data.recycled || false)
       setCurrentIdx(0)
       setDragX(0)
       setDragY(0)
@@ -258,6 +260,15 @@ export default function SwipeDeck() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden px-4 py-4 select-none">
+      {/* Recycled notification */}
+      {recycled && (
+        <div className="mb-3 rounded-2xl bg-[#FFB347]/20 border border-[#FFB347]/30 px-4 py-2 text-center">
+          <p className="text-xs font-medium text-[#8C5E1A]">
+            🔄 Showing recipes you previously passed on — swipe again!
+          </p>
+        </div>
+      )}
+
       {/* Match notification */}
       {matchNotification && (
         <div className="mb-3 rounded-2xl bg-[#FFD93D] px-4 py-3 text-center shadow-sm">

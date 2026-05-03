@@ -381,6 +381,29 @@ def get_recipe_feed(
     fetch_limit = limit * 5
     recipes = query.order_by(func.random()).limit(fetch_limit).offset(offset).all()
     
+    # Track if we're showing recycled (previously declined) recipes
+    recycled = False
+    
+    # If pool is exhausted, recycle left-swipes (recipes user passed on)
+    if len(recipes) < limit:
+        # Get left-swipe IDs to recycle
+        left_swipe_ids = [
+            s.recipe_id for s in db.query(Swipe).filter(
+                Swipe.user_id == user.id,
+                Swipe.direction == "left",
+                Swipe.created_at > datetime.utcnow() - timedelta(days=30)
+            ).all()
+        ]
+        if left_swipe_ids:
+            # Exclude still-matched recipes, but allow previously left-swiped
+            recycle_excluded = list(set(matched_ids))  # Don't recycle matched ones
+            recycle_query = base_query.filter(~Recipe.id.in_(recycle_excluded)) if recycle_excluded else base_query
+            recycle_query = recycle_query.filter(Recipe.id.in_(left_swipe_ids))
+            recycled_recipes = recycle_query.order_by(func.random()).limit(limit * 5).all()
+            if recycled_recipes:
+                recipes = recycled_recipes
+                recycled = True
+    
     # Only hit Spoonacular if cache is low
     global _last_spoonacular_error
     in_cooldown = (datetime.utcnow().timestamp() - _last_spoonacular_error) < SPOONACULAR_COOLDOWN_SECONDS
@@ -439,7 +462,7 @@ def get_recipe_feed(
                 "stretch_minutes": r.total_time_minutes - budget,
             })
     
-    return {"recipes": result[:limit]}
+    return {"recipes": result[:limit], "recycled": recycled}
 
 
 @app.get("/recipes/{recipe_id}")
@@ -691,6 +714,40 @@ def auto_schedule(user: User = Depends(get_current_user), db: Session = Depends(
         
         db.commit()
         return {"scheduled": assigned, "algorithm": "greedy"}
+
+
+@app.post("/reset")
+def reset_couple_data(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Reset all couple data: delete matches, clear calendar, clear swipes."""
+    couple = get_couple_for_user(user, db)
+    
+    # Delete all swipes for both partners
+    partner_ids = [couple.partner_1_id]
+    if couple.partner_2_id:
+        partner_ids.append(couple.partner_2_id)
+    
+    db.query(Swipe).filter(Swipe.user_id.in_(partner_ids)).delete(synchronize_session=False)
+    
+    # Delete all matches for the couple
+    db.query(Match).filter(Match.couple_id == couple.id).delete(synchronize_session=False)
+    
+    # Clear current week's calendar
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == week_start,
+    ).first()
+    if cal:
+        for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+            setattr(cal, f"{day}_match_id", None)
+    
+    db.commit()
+    
+    return {
+        "ok": True,
+        "message": "All matches, swipes, and calendar entries cleared. Recipes are back in rotation.",
+    }
 
 
 @app.post("/calendar/move/{match_id}/{from_day}/{to_day}")
