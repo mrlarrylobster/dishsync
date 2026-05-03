@@ -331,7 +331,12 @@ export default function SwipeDeck() {
                 className="h-full w-full object-cover"
                 draggable={false}
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none'
+                  const target = e.currentTarget
+                  target.style.display = 'none'
+                  const parent = target.parentElement
+                  if (parent) {
+                    parent.className = 'relative h-[55%] w-full cursor-pointer flex items-center justify-center bg-[#FFFBF7]'
+                  }
                 }}
               />
             ) : (

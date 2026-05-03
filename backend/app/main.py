@@ -377,7 +377,9 @@ def get_recipe_feed(
     from sqlalchemy import func
     base_query = db.query(Recipe).filter(Recipe.image_url.isnot(None))
     query = base_query.filter(~Recipe.id.in_(excluded_ids)) if excluded_ids else base_query
-    recipes = query.order_by(func.random()).limit(limit).offset(offset).all()
+    # Fetch more than needed since budget/time filtering will drop some
+    fetch_limit = limit * 5
+    recipes = query.order_by(func.random()).limit(fetch_limit).offset(offset).all()
     
     # Only hit Spoonacular if cache is low
     global _last_spoonacular_error
@@ -629,9 +631,22 @@ def auto_schedule(user: User = Depends(get_current_user), db: Session = Depends(
     if not matches:
         return {"scheduled": 0, "message": "No pending matches to schedule"}
     
-    # Get available days (not already scheduled)
+    # Get available days (not already scheduled) — validate matches actually exist
     days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    available_days = [day for day in days if not getattr(cal, f"{day}_match_id")]
+    available_days = []
+    for day in days:
+        match_id = getattr(cal, f"{day}_match_id")
+        if match_id:
+            # Validate the match still exists
+            match_exists = db.query(Match).filter(Match.id == match_id).first()
+            if not match_exists:
+                # Clean up orphaned reference
+                setattr(cal, f"{day}_match_id", None)
+                available_days.append(day)
+        else:
+            available_days.append(day)
+    
+    db.commit()  # Persist any orphaned cleanup
     
     if len(matches) > len(available_days):
         matches = matches[:len(available_days)]
