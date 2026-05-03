@@ -15,20 +15,22 @@ def test_health():
 
 
 def test_register_and_login():
+    import time
+    unique_email = f"test_{int(time.time()*1000)}@example.com"
     # Register
     resp = client.post("/auth/register", json={
-        "email": "test@example.com",
+        "email": unique_email,
         "password": "password123",
         "display_name": "Test User",
     })
     assert resp.status_code == 200
     data = resp.json()
     assert "token" in data
-    assert data["user"]["email"] == "test@example.com"
+    assert data["user"]["email"] == unique_email
     
     # Login
     resp = client.post("/auth/login", json={
-        "email": "test@example.com",
+        "email": unique_email,
         "password": "password123",
     })
     assert resp.status_code == 200

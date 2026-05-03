@@ -2,11 +2,7 @@ import { useState } from 'react'
 import { Heart, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react'
 import { login, register } from '../lib/api'
 
-interface Props {
-  onAuth: () => void
-}
-
-export function AuthScreen({ onAuth }: Props) {
+export default function AuthScreen({ onLogin }: { onLogin: (token: string) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -20,11 +16,12 @@ export function AuthScreen({ onAuth }: Props) {
     setError('')
     try {
       if (mode === 'login') {
-        await login(email, password)
+        const data = await login(email, password)
+        onLogin(data.token)
       } else {
-        await register(email, password, name)
+        const data = await register(email, password, name)
+        onLogin(data.token)
       }
-      onAuth()
     } catch (err: any) {
       setError(err.message || 'Something went wrong')
     } finally {

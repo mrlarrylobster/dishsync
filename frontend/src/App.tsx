@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Heart, X, Clock, ChefHat, ShoppingCart, Calendar, Settings, User } from 'lucide-react'
+import { Heart, ChefHat, ShoppingCart, Calendar } from 'lucide-react'
 import AuthScreen from './components/AuthScreen'
 import SwipeDeck from './components/SwipeDeck'
 import CalendarView from './components/CalendarView'
@@ -36,11 +36,11 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        {view === 'setup' && <CoupleSetup token={token} onComplete={() => setView('swipe')} />}
-        {view === 'swipe' && <SwipeDeck token={token} />}
-        {view === 'calendar' && <CalendarView token={token} />}
-        {view === 'pantry' && <PantryView token={token} />}
-        {view === 'grocery' && <GroceryView token={token} />}
+        {view === 'setup' && <CoupleSetup onComplete={() => setView('swipe')} />}
+        {view === 'swipe' && <SwipeDeck />}
+        {view === 'calendar' && <CalendarView />}
+        {view === 'pantry' && <PantryView />}
+        {view === 'grocery' && <GroceryView />}
       </main>
 
       {/* Bottom Nav */}

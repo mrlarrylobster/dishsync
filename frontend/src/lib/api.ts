@@ -1,239 +1,168 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const API_BASE = ''
 
-export interface User {
-  id: string
-  email: string
-  name: string
-  coupleId: string | null
+function getToken() {
+  return localStorage.getItem('dishsync_token')
 }
 
-export interface Couple {
-  id: string
-  code: string
-  members: { id: string; name: string }[]
-}
-
-export interface Recipe {
-  id: string
-  title: string
-  description: string
-  imageUrl: string
-  prepTime: number
-  cookTime: number
-  servings: number
-  tags: string[]
-  ingredients: Ingredient[]
-}
-
-export interface Ingredient {
-  name: string
-  amount: string
-  unit: string
-  checked?: boolean
-}
-
-export interface PantryItem {
-  id: string
-  name: string
-  quantity: string
-  unit: string
-  expiresAt?: string
-  category: string
-}
-
-export interface Match {
-  id: string
-  recipeId: string
-  recipe: Recipe
-  date: string
-  matchedBy: string[]
-  cooked: boolean
-}
-
-export interface SwipeAction {
-  recipeId: string
-  liked: boolean
+function authHeaders(): Record<string, string> {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 /* ─── Auth ─── */
 
-export async function login(email: string, password: string): Promise<User> {
+export async function register(email: string, password: string, display_name: string) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, display_name }),
+  })
+  if (!res.ok) throw new Error('Registration failed')
+  const data = await res.json()
+  localStorage.setItem('dishsync_token', data.token)
+  return data
+}
+
+export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function register(email: string, password: string, name: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, name }),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function getMe(): Promise<User | null> {
-  const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
-  if (res.status === 401) return null
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
+  if (!res.ok) throw new Error('Login failed')
+  const data = await res.json()
+  localStorage.setItem('dishsync_token', data.token)
+  return data
 }
 
 /* ─── Couple ─── */
 
-export async function createCouple(): Promise<Couple> {
+export async function createCouple(time_budget = 60) {
   const res = await fetch(`${API_BASE}/couples`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ time_budget_minutes: time_budget }),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to create couple')
   return res.json()
 }
 
-export async function joinCouple(code: string): Promise<Couple> {
+export async function joinCouple(invite_code: string) {
   const res = await fetch(`${API_BASE}/couples/join`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ code }),
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invite_code }),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to join couple')
   return res.json()
 }
 
-export async function getCouple(): Promise<Couple | null> {
-  const res = await fetch(`${API_BASE}/couples/me`, { credentials: 'include' })
+export async function getCouple() {
+  const res = await fetch(`${API_BASE}/couples/me`, {
+    headers: authHeaders(),
+  })
   if (res.status === 404) return null
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to get couple')
   return res.json()
 }
 
-/* ─── Swipe / Recipes ─── */
+/* ─── Recipes ─── */
 
-export async function getRecipeBatch(): Promise<Recipe[]> {
-  const res = await fetch(`${API_BASE}/recipes/batch`, { credentials: 'include' })
-  if (!res.ok) throw new Error(await res.text())
+export async function getRecipeFeed(limit = 20) {
+  const res = await fetch(`${API_BASE}/recipes/feed?limit=${limit}`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to fetch recipes')
   return res.json()
 }
 
-export async function submitSwipe(recipeId: string, liked: boolean): Promise<void> {
+/* ─── Swipes ─── */
+
+export async function swipeRecipe(recipe_id: string, direction: 'left' | 'right') {
   const res = await fetch(`${API_BASE}/swipes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ recipeId, liked }),
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipe_id, direction }),
   })
-  if (!res.ok) throw new Error(await res.text())
-}
-
-/* ─── Matches / Calendar ─── */
-
-export async function getMatches(start?: string, end?: string): Promise<Match[]> {
-  const qs = start && end ? `?start=${start}&end=${end}` : ''
-  const res = await fetch(`${API_BASE}/matches${qs}`, { credentials: 'include' })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Swipe failed')
   return res.json()
 }
 
-export async function markCooked(matchId: string, cooked: boolean): Promise<void> {
-  const res = await fetch(`${API_BASE}/matches/${matchId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ cooked }),
+/* ─── Matches ─── */
+
+export async function getMatches() {
+  const res = await fetch(`${API_BASE}/matches`, {
+    headers: authHeaders(),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to get matches')
+  return res.json()
 }
 
-export async function unmatch(matchId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/matches/${matchId}`, {
-    method: 'DELETE',
-    credentials: 'include',
+/* ─── Calendar ─── */
+
+export async function getCalendar() {
+  const res = await fetch(`${API_BASE}/calendar/current`, {
+    headers: authHeaders(),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to get calendar')
+  return res.json()
+}
+
+export async function scheduleMatch(match_id: string, day: string) {
+  const res = await fetch(`${API_BASE}/matches/${match_id}/schedule`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ match_id, day }),
+  })
+  if (!res.ok) throw new Error('Failed to schedule')
+  return res.json()
+}
+
+export async function autoSchedule() {
+  const res = await fetch(`${API_BASE}/calendar/auto-schedule`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Auto-schedule failed')
+  return res.json()
 }
 
 /* ─── Pantry ─── */
 
-export async function getPantry(): Promise<PantryItem[]> {
-  const res = await fetch(`${API_BASE}/pantry`, { credentials: 'include' })
-  if (!res.ok) throw new Error(await res.text())
+export async function getPantry() {
+  const res = await fetch(`${API_BASE}/pantry`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to get pantry')
   return res.json()
 }
 
-export async function addPantryItem(item: Omit<PantryItem, 'id'>): Promise<PantryItem> {
+export async function addPantryItem(item: any) {
   const res = await fetch(`${API_BASE}/pantry`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(item),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to add pantry item')
   return res.json()
 }
 
-export async function updatePantryItem(id: string, item: Partial<PantryItem>): Promise<PantryItem> {
-  const res = await fetch(`${API_BASE}/pantry/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(item),
+/* ─── Grocery ─── */
+
+export async function getGroceryList() {
+  const res = await fetch(`${API_BASE}/grocery/current`, {
+    headers: authHeaders(),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to get grocery list')
   return res.json()
 }
 
-export async function deletePantryItem(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/pantry/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  })
-  if (!res.ok) throw new Error(await res.text())
-}
-
-/* ─── Grocery List ─── */
-
-export async function getGroceryList(): Promise<Ingredient[]> {
-  const res = await fetch(`${API_BASE}/groceries`, { credentials: 'include' })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-export async function addGroceryItem(item: Ingredient): Promise<Ingredient> {
-  const res = await fetch(`${API_BASE}/groceries`, {
+export async function checkGroceryItem(item_id: string, is_checked: boolean) {
+  const res = await fetch(`${API_BASE}/grocery/check`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(item),
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_id, is_checked }),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error('Failed to update item')
   return res.json()
-}
-
-export async function toggleGroceryItem(name: string, checked: boolean): Promise<void> {
-  const res = await fetch(`${API_BASE}/groceries/${encodeURIComponent(name)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ checked }),
-  })
-  if (!res.ok) throw new Error(await res.text())
-}
-
-export async function deleteGroceryItem(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/groceries/${encodeURIComponent(name)}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  })
-  if (!res.ok) throw new Error(await res.text())
 }
