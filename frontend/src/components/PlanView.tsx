@@ -34,7 +34,6 @@ interface Match {
   status: 'pending' | 'scheduled'
 }
 
-// Draggable meal card
 function DraggableMeal({ match, onTap }: { match: Match; onTap: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: match.match_id,
@@ -46,30 +45,29 @@ function DraggableMeal({ match, onTap }: { match: Match; onTap: () => void }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex items-center gap-2 p-2 rounded-xl bg-white border border-[#F0E6E0] shadow-sm select-none ${
+      className={`flex items-center gap-3 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm select-none ${
         isDragging ? 'opacity-40' : 'opacity-100'
       }`}
       style={{ touchAction: 'none' }}
       onClick={onTap}
     >
-      <GripVertical size={16} className="text-[#8C8C8C] shrink-0" />
+      <GripVertical size={18} className="text-[#8C8C8C] shrink-0" />
       {match.recipe.image_url ? (
-        <img src={match.recipe.image_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" draggable={false} />
+        <img src={match.recipe.image_url} alt="" className="h-10 w-10 rounded-lg object-cover shrink-0" draggable={false} />
       ) : (
-        <div className="h-8 w-8 rounded-lg bg-[#FFFBF7] flex items-center justify-center shrink-0">
-          <Clock size={12} className="text-[#8C8C8C]" />
+        <div className="h-10 w-10 rounded-lg bg-[#FFFBF7] flex items-center justify-center shrink-0">
+          <Clock size={14} className="text-[#8C8C8C]" />
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-[#2D2D2D] truncate">{match.recipe.title}</p>
-        <span className="text-[10px] text-[#8C8C8C]">{match.recipe.total_time_minutes} min</span>
+        <p className="text-sm font-medium text-[#2D2D2D] truncate">{match.recipe.title}</p>
+        <span className="text-xs text-[#8C8C8C]">{match.recipe.total_time_minutes} min</span>
       </div>
     </div>
   )
 }
 
-// Droppable day slot
-function DaySlot({
+function DayRow({
   day,
   label,
   match,
@@ -87,15 +85,22 @@ function DaySlot({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border-2 p-2 transition-colors min-h-[80px] ${
-        isOver ? 'border-[#4ECDC4] bg-[#4ECDC4]/10' : match ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5' : 'border-[#F0E6E0] bg-white'
+      className={`rounded-2xl border-2 p-3 transition-colors ${
+        isOver
+          ? 'border-[#4ECDC4] bg-[#4ECDC4]/10'
+          : match
+          ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5'
+          : 'border-[#F0E6E0] bg-white'
       }`}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-bold text-[#8C8C8C] uppercase">{label}</span>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-[#8C8C8C] uppercase">{label}</span>
         {match && (
-          <button onClick={onRemove} className="p-0.5 rounded-full hover:bg-red-50 text-[#8C8C8C] hover:text-red-500">
-            <Trash2 size={12} />
+          <button
+            onClick={onRemove}
+            className="p-1 rounded-full hover:bg-red-50 text-[#8C8C8C] hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={14} />
           </button>
         )}
       </div>
@@ -103,8 +108,10 @@ function DaySlot({
       {match ? (
         <DraggableMeal match={match} onTap={onTap} />
       ) : (
-        <div className={`h-12 rounded-lg border-2 border-dashed flex items-center justify-center ${isOver ? 'border-[#4ECDC4]' : 'border-[#E8E8E8]'}`}>
-          <span className="text-[10px] text-[#8C8C8C]">Drop</span>
+        <div className={`h-16 rounded-xl border-2 border-dashed flex items-center justify-center ${
+          isOver ? 'border-[#4ECDC4] bg-[#4ECDC4]/5' : 'border-[#E8E8E8] bg-[#FFFBF7]'
+        }`}>
+          <span className="text-xs text-[#8C8C8C]">Drop here</span>
         </div>
       )}
     </div>
@@ -204,18 +211,15 @@ export default function PlanView() {
     const matchId = active.id as string
     const toDay = over.id as string
 
-    // Check if dragging from calendar
     const fromDay = DAYS.find((d) => calendar?.[d]?.id === matchId)
     if (fromDay) {
       if (fromDay !== toDay) handleMove(matchId, fromDay, toDay)
       return
     }
 
-    // Dragging from pending matches pool
     handleSchedule(matchId, toDay)
   }
 
-  // Build matches for each day from calendar
   const dayMatches: Record<string, Match | undefined> = {}
   DAYS.forEach((day) => {
     const calData = calendar?.[day]
@@ -242,7 +246,7 @@ export default function PlanView() {
   return (
     <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-[#2D2D2D]">Plan</h2>
+        <h2 className="text-lg font-bold text-[#2D2D2D]">Weekly Plan</h2>
         <button
           onClick={handleAutoSchedule}
           disabled={autoScheduling}
@@ -254,10 +258,10 @@ export default function PlanView() {
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Week grid */}
-        <div className="grid grid-cols-7 gap-1 mb-4">
+        {/* Days list — full width rows */}
+        <div className="space-y-3 mb-6">
           {DAYS.map((day, i) => (
-            <DaySlot
+            <DayRow
               key={day}
               day={day}
               label={DAY_LABELS[i]}
@@ -277,9 +281,11 @@ export default function PlanView() {
           </div>
 
           {pendingMatches.length === 0 ? (
-            <p className="text-xs text-[#8C8C8C] text-center py-4">No pending matches. Swipe right to match!</p>
+            <p className="text-xs text-[#8C8C8C] text-center py-4">
+              No pending matches. Swipe right to match!
+            </p>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
               {pendingMatches.map((match) => (
                 <DraggableMeal
                   key={match.match_id}
@@ -293,10 +299,10 @@ export default function PlanView() {
 
         <DragOverlay dropAnimation={null}>
           {activeDragMatch ? (
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-white border-2 border-[#4ECDC4] shadow-xl select-none">
-              <GripVertical size={16} className="text-[#4ECDC4]" />
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border-2 border-[#4ECDC4] shadow-xl select-none">
+              <GripVertical size={18} className="text-[#4ECDC4] shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[#2D2D2D] truncate">{activeDragMatch.recipe.title}</p>
+                <p className="text-sm font-medium text-[#2D2D2D] truncate">{activeDragMatch.recipe.title}</p>
               </div>
             </div>
           ) : null}
