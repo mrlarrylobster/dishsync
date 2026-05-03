@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart, X, Clock, Flame, ChefHat, Loader2, Sparkles } from 'lucide-react'
+import { Heart, X, Clock, Flame, ChefHat, Loader2, Sparkles, Info } from 'lucide-react'
 import { getRecipeFeed, swipeRecipe } from '../lib/api'
+import RecipeDetailModal from './RecipeDetailModal'
 
 interface Recipe {
   id: string
@@ -20,6 +21,7 @@ export default function SwipeDeck() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [matchNotification, setMatchNotification] = useState<string | null>(null)
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
   // Drag state
   const [dragX, setDragX] = useState(0)
@@ -287,6 +289,14 @@ export default function SwipeDeck() {
               </div>
             )}
 
+            {/* Info button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelectedRecipe(recipe); }}
+              className="absolute top-4 right-1/2 translate-x-1/2 z-20 p-2 rounded-full bg-white/90 backdrop-blur shadow-md active:scale-95"
+            >
+              <Info size={16} className="text-[#2D2D2D]" />
+            </button>
+
             {/* Title on image */}
             <div className="absolute bottom-4 left-4 right-4">
               <h2 className="text-xl font-bold text-white leading-tight drop-shadow-lg">
@@ -294,6 +304,18 @@ export default function SwipeDeck() {
               </h2>
             </div>
           </div>
+
+          {/* Synergy info */}
+          {recipe.ingredients && recipe.ingredients.length > 0 && (
+            <div 
+              className="mt-2 mx-4 rounded-xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20 px-3 py-2"
+              onClick={() => setSelectedRecipe(recipe)}
+            >
+              <p className="text-xs text-[#2D2D2D]">
+                <span className="font-semibold">🛒 Smart tip:</span> Uses common pantry ingredients
+              </p>
+            </div>
+          )}
 
           {/* Info section */}
           <div className="p-5 flex flex-col justify-between h-[45%]">
@@ -337,6 +359,12 @@ export default function SwipeDeck() {
       <p className="text-center text-xs text-[#8C8C8C] mt-3">
         Swipe right to like · Swipe left to pass · Or tap buttons
       </p>
+
+      {/* Recipe Detail Modal */}
+      <RecipeDetailModal 
+        recipe={selectedRecipe} 
+        onClose={() => setSelectedRecipe(null)} 
+      />
     </div>
   )
 }

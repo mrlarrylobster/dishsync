@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Sparkles, Trash2, Loader2, Clock } from 'lucide-react'
-import { getCalendar, autoSchedule, requestVeto } from '../lib/api'
+import { Sparkles, Trash2, Loader2, Clock, GripVertical } from 'lucide-react'
+import { getCalendar, autoSchedule, requestVeto, moveMatch } from '../lib/api'
+import RecipeDetailModal from './RecipeDetailModal'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -14,6 +15,7 @@ interface DayData {
     image_url?: string
     total_time_minutes: number
     tags: string[]
+    ingredients?: { name: string; category: string }[]
   }
 }
 
@@ -21,6 +23,8 @@ export default function CalendarView() {
   const [calendar, setCalendar] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [autoScheduling, setAutoScheduling] = useState(false)
+  const [selectedRecipe, setSelectedRecipe] = useState<any>(null)
+  const [draggingDay, setDraggingDay] = useState<string | null>(null)
 
   useEffect(() => {
     loadCalendar()
@@ -59,6 +63,41 @@ export default function CalendarView() {
     }
   }
 
+  async function handleMove(matchId: string, fromDay: string, toDay: string) {
+    try {
+      await moveMatch(matchId, fromDay, toDay)
+      loadCalendar()
+    } catch (err) {
+      console.error('Move failed:', err)
+    }
+  }
+
+  // Drag handlers
+  function onDragStart(e: React.DragEvent, day: string) {
+    setDraggingDay(day)
+    e.dataTransfer.setData('text/plain', day)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  function onDrop(e: React.DragEvent, toDay: string) {
+    e.preventDefault()
+    const fromDay = e.dataTransfer.getData('text/plain')
+    if (fromDay && fromDay !== toDay && calendar?.[fromDay]) {
+      const matchId = calendar[fromDay].id
+      handleMove(matchId, fromDay, toDay)
+    }
+    setDraggingDay(null)
+  }
+
+  function onDragEnd() {
+    setDraggingDay(null)
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -88,12 +127,18 @@ export default function CalendarView() {
       <div className="space-y-2">
         {DAYS.map((day, i) => {
           const dayData: DayData | null = calendar?.[day]
+          const isDragging = draggingDay === day
           return (
             <div
               key={day}
-              className={`flex items-center gap-3 rounded-2xl border p-3 ${
+              draggable={!!dayData}
+              onDragStart={(e) => onDragStart(e, day)}
+              onDragOver={onDragOver}
+              onDrop={(e) => onDrop(e, day)}
+              onDragEnd={onDragEnd}
+              className={`flex items-center gap-3 rounded-2xl border p-3 transition ${
                 dayData ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5' : 'border-[#F0E6E0] bg-white'
-              }`}
+              } ${isDragging ? 'opacity-50' : ''} ${draggingDay && draggingDay !== day && !dayData ? 'border-dashed border-[#4ECDC4]' : ''}`}
             >
               {/* Day badge */}
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FFFBF7]">
@@ -101,7 +146,17 @@ export default function CalendarView() {
               </div>
 
               {dayData ? (
-                <div className="flex-1 min-w-0">
+                <div 
+                  className="flex-1 min-w-0"
+                  onClick={() => setSelectedRecipe({
+                    id: dayData.id,
+                    title: dayData.recipe.title,
+                    image_url: dayData.recipe.image_url,
+                    total_time_minutes: dayData.recipe.total_time_minutes,
+                    tags: dayData.recipe.tags,
+                    ingredients: dayData.recipe.ingredients || []
+                  })}
+                >
                   <p className="text-sm font-medium text-[#2D2D2D] truncate">
                     {dayData.recipe.title}
                   </p>
@@ -118,16 +173,21 @@ export default function CalendarView() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-[#8C8C8C]">No meal planned</p>
+                <p className="text-sm text-[#8C8C8C]">Drop a meal here</p>
               )}
 
               {dayData && (
-                <button
-                  onClick={() => handleRemove(day)}
-                  className="p-2 rounded-full text-[#8C8C8C] hover:bg-red-50 hover:text-red-500 active:scale-95"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <div className="p-1.5 rounded-full text-[#8C8C8C]" title="Drag to move">
+                    <GripVertical size={16} />
+                  </div>
+                  <button
+                    onClick={() => handleRemove(day)}
+                    className="p-2 rounded-full text-[#8C8C8C] hover:bg-red-50 hover:text-red-500 active:scale-95"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               )}
             </div>
           )
@@ -137,10 +197,16 @@ export default function CalendarView() {
       {calendar?.monday && (
         <div className="mt-4 p-3 rounded-2xl bg-[#FFD93D]/10 border border-[#FFD93D]/20">
           <p className="text-xs text-[#8C8C8C]">
-            💡 Tap "Auto-Schedule" to intelligently place matched dishes across the week based on ingredient synergy and perishability.
+            💡 Drag a meal to a different day to reschedule. Tap a meal to see details.
           </p>
         </div>
       )}
+
+      {/* Recipe Detail Modal */}
+      <RecipeDetailModal
+        recipe={selectedRecipe}
+        onClose={() => setSelectedRecipe(null)}
+      />
     </div>
   )
 }

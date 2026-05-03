@@ -72,7 +72,10 @@ export async function getRecipeFeed(limit = 20) {
   const res = await fetch(`${API_BASE}/recipes/feed?limit=${limit}`, {
     headers: authHeaders(),
   })
-  if (!res.ok) throw new Error('Failed to fetch recipes')
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Failed to fetch recipes (${res.status}): ${text.slice(0, 100)}`)
+  }
   return res.json()
 }
 
@@ -134,6 +137,15 @@ export async function autoSchedule() {
     headers: authHeaders(),
   })
   if (!res.ok) throw new Error('Auto-schedule failed')
+  return res.json()
+}
+
+export async function moveMatch(match_id: string, from_day: string, to_day: string) {
+  const res = await fetch(`${API_BASE}/calendar/move/${match_id}/${from_day}/${to_day}`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to move match')
   return res.json()
 }
 

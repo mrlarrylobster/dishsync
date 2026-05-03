@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Heart, Clock, ChefHat, Loader2, CalendarDays, ArrowRight } from 'lucide-react'
 import { getMatches, scheduleMatch } from '../lib/api'
+import RecipeDetailModal from './RecipeDetailModal'
 
 interface Match {
   match_id: string
@@ -9,6 +10,7 @@ interface Match {
   total_time_minutes: number
   tags: string[]
   status: string
+  ingredients?: { name: string; category: string }[]
 }
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -19,6 +21,7 @@ export default function MatchesView() {
   const [loading, setLoading] = useState(true)
   const [schedulingId, setSchedulingId] = useState<string | null>(null)
   const [showDayPicker, setShowDayPicker] = useState<string | null>(null)
+  const [selectedRecipe, setSelectedRecipe] = useState<Match | null>(null)
 
   useEffect(() => {
     loadMatches()
@@ -80,7 +83,10 @@ export default function MatchesView() {
 
       <div className="space-y-3">
         {matches.map((match) => (
-          <div key={match.match_id} className="rounded-2xl bg-white border border-[#F0E6E0] overflow-hidden shadow-sm">
+          <div key={match.match_id} 
+            className="rounded-2xl bg-white border border-[#F0E6E0] overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
+            onClick={() => setSelectedRecipe(match)}
+          >
             <div className="flex">
               {/* Image */}
               <div className="w-24 h-24 shrink-0">
@@ -108,7 +114,7 @@ export default function MatchesView() {
                     {DAYS.map((day, i) => (
                       <button
                         key={day}
-                        onClick={() => handleSchedule(match.match_id, day)}
+                        onClick={(e) => { e.stopPropagation(); handleSchedule(match.match_id, day); }}
                         disabled={schedulingId === match.match_id}
                         className="px-2 py-1 rounded-lg bg-[#4ECDC4] text-white text-xs font-semibold active:scale-95"
                       >
@@ -118,7 +124,7 @@ export default function MatchesView() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => setShowDayPicker(match.match_id)}
+                    onClick={(e) => { e.stopPropagation(); setShowDayPicker(match.match_id); }}
                     className="flex items-center gap-1 mt-2 text-xs font-semibold text-[#FF6B4A]"
                   >
                     <CalendarDays size={14} />
@@ -131,6 +137,19 @@ export default function MatchesView() {
           </div>
         ))}
       </div>
+
+      {/* Recipe Detail Modal */}
+      <RecipeDetailModal
+        recipe={selectedRecipe ? {
+          id: selectedRecipe.match_id,
+          title: selectedRecipe.title,
+          image_url: selectedRecipe.image_url,
+          total_time_minutes: selectedRecipe.total_time_minutes,
+          tags: selectedRecipe.tags,
+          ingredients: selectedRecipe.ingredients || []
+        } : null}
+        onClose={() => setSelectedRecipe(null)}
+      />
     </div>
   )
 }

@@ -674,6 +674,51 @@ def auto_schedule(user: User = Depends(get_current_user), db: Session = Depends(
         return {"scheduled": assigned, "algorithm": "greedy"}
 
 
+@app.post("/calendar/move/{match_id}/{from_day}/{to_day}")
+def move_match_day(
+    match_id: str,
+    from_day: str,
+    to_day: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Move a scheduled match from one day to another"""
+    couple = get_couple_for_user(user, db)
+    
+    if from_day not in DAYS or to_day not in DAYS:
+        raise HTTPException(status_code=400, detail="Invalid day")
+    
+    match = db.query(Match).filter(Match.id == match_id, Match.couple_id == couple.id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == week_start
+    ).first()
+    
+    if not cal:
+        raise HTTPException(status_code=404, detail="No calendar found")
+    
+    from_col = f"{from_day}_match_id"
+    to_col = f"{to_day}_match_id"
+    
+    if getattr(cal, from_col) != match_id:
+        raise HTTPException(status_code=400, detail="Match not scheduled on that day")
+    
+    existing = getattr(cal, to_col)
+    
+    setattr(cal, from_col, None)
+    setattr(cal, to_col, match_id)
+    match.status = "scheduled"
+    
+    db.commit()
+    
+    return {"ok": True, "message": f"Moved from {from_day} to {to_day}", "displaced": existing}
+
+
 def _score_assignment(matches, couple, db):
     """Score a weekly assignment using multi-objective optimization."""
     w1, w2, w3, w4 = 0.35, 0.30, 0.25, 0.10
