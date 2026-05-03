@@ -361,13 +361,23 @@ def get_recipe_feed(
         ).all()
     ]
     
-    # Get from cache first
-    recipes = db.query(Recipe).filter(~Recipe.id.in_(swiped_ids)).limit(limit).offset(offset).all()
+    # Get already matched recipe IDs (so they don't appear again)
+    matched_ids = [
+        m.recipe_id for m in db.query(Match).filter(
+            Match.couple_id == couple.id,
+            Match.status.in_(["pending", "scheduled"])
+        ).all()
+    ]
     
-    # Only hit Spoonacular if:
-    # 1. Cache is low (< limit)
-    # 2. API key is configured
-    # 3. Not in cooldown period after previous rate limit
+    # Combine exclusions
+    excluded_ids = list(set(swiped_ids + matched_ids))
+    
+    # Get from cache — random order for variety
+    from sqlalchemy import func
+    query = db.query(Recipe).filter(~Recipe.id.in_(excluded_ids)) if excluded_ids else db.query(Recipe)
+    recipes = query.order_by(func.random()).limit(limit).offset(offset).all()
+    
+    # Only hit Spoonacular if cache is low
     global _last_spoonacular_error
     in_cooldown = (datetime.utcnow().timestamp() - _last_spoonacular_error) < SPOONACULAR_COOLDOWN_SECONDS
     
@@ -387,7 +397,6 @@ def get_recipe_feed(
             resp = httpx.get("https://api.spoonacular.com/recipes/complexSearch", params=params, timeout=30)
             
             if resp.status_code == 429:
-                # Rate limited — enter cooldown
                 _last_spoonacular_error = datetime.utcnow().timestamp()
                 print("Spoonacular rate limited — entering 1-hour cooldown")
             elif resp.status_code == 200:
@@ -396,15 +405,15 @@ def get_recipe_feed(
                     if not existing:
                         _spoonacular_to_recipe(r, db)
                 db.commit()
-                # Re-fetch from DB after adding new recipes
-                recipes = db.query(Recipe).filter(~Recipe.id.in_(swiped_ids)).limit(limit).offset(offset).all()
+                # Re-fetch
+                recipes = query.order_by(func.random()).limit(limit).offset(offset).all()
             else:
                 print(f"Spoonacular error: {resp.status_code} - {resp.text[:200]}")
                 
         except Exception as e:
             print(f"Spoonacular fetch error: {e}")
     
-    # Filter by time budget (with stretch)
+    # Filter by time budget (with stretch) — up to 50% over budget shown as stretch
     budget = couple.time_budget_minutes
     result = []
     for r in recipes:
@@ -416,18 +425,15 @@ def get_recipe_feed(
                 "stretch_minutes": max(0, r.total_time_minutes - budget) if is_stretch else 0,
             })
     
-    # If we have no recipes at all (everything swiped OR all remaining are over budget)
-    if len(result) == 0:
-        # Return previously swiped recipes (they'll swipe again) that pass budget
-        all_recipes = db.query(Recipe).limit(limit).offset(offset).all()
-        for r in all_recipes:
-            is_stretch = r.total_time_minutes > budget
-            if r.total_time_minutes <= budget * 1.5:
-                result.append({
-                    **_recipe_to_read(r),
-                    "is_stretch": is_stretch,
-                    "stretch_minutes": max(0, r.total_time_minutes - budget) if is_stretch else 0,
-                })
+    # With 1000+ recipes, we should never need to recycle. 
+    # If nothing passes budget filter, return over-budget recipes as stretch
+    if len(result) == 0 and recipes:
+        for r in recipes:
+            result.append({
+                **_recipe_to_read(r),
+                "is_stretch": True,
+                "stretch_minutes": r.total_time_minutes - budget,
+            })
     
     return {"recipes": result[:limit]}
 
