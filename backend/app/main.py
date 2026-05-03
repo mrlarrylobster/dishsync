@@ -365,13 +365,15 @@ def get_recipe_feed(
         ).all()
     ]
     
-    # Get already matched recipe IDs (so they don't appear again)
-    matched_ids = [
-        m.recipe_id for m in db.query(Match).filter(
-            Match.couple_id == couple.id,
-            Match.status.in_(["pending", "scheduled"])
-        ).all()
-    ]
+    # Get already matched recipe IDs (so they don't appear again) — only if couple exists
+    matched_ids = []
+    if couple:
+        matched_ids = [
+            m.recipe_id for m in db.query(Match).filter(
+                Match.couple_id == couple.id,
+                Match.status.in_(["pending", "scheduled"])
+            ).all()
+        ]
     
     # Combine exclusions
     excluded_ids = list(set(swiped_ids + matched_ids))
@@ -499,7 +501,7 @@ def create_swipe(payload: SwipeCreate, user: User = Depends(get_current_user), d
     
     # Check for match (if partner also swiped right)
     couple = get_couple_for_user(user, db)
-    if payload.direction == "right" and couple.partner_2_id:
+    if couple and payload.direction == "right" and couple.partner_2_id:
         partner_id = couple.partner_1_id if couple.partner_2_id == user.id else couple.partner_2_id
         partner_swipe = db.query(Swipe).filter(
             Swipe.user_id == partner_id,
