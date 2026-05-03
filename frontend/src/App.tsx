@@ -13,6 +13,52 @@ export type View = 'auth' | 'setup' | 'swipe' | 'calendar' | 'pantry' | 'grocery
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('dishsync_token'))
   const [view, setView] = useState<View>('swipe')
+  const [wsMessage, setWsMessage] = useState<any>(null)
+
+  // WebSocket connection for real-time match reveals
+  useEffect(() => {
+    if (!token) return
+    
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/${token}`
+    const ws = new WebSocket(wsUrl)
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected')
+    }
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'match.revealed') {
+          setWsMessage(data)
+          // Auto-dismiss after 5 seconds
+          setTimeout(() => setWsMessage(null), 5000)
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err)
+      }
+    }
+    
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err)
+    }
+    
+    ws.onclose = () => {
+      console.log('WebSocket disconnected')
+    }
+    
+    // Keepalive ping
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send('ping')
+      }
+    }, 30000)
+    
+    return () => {
+      clearInterval(pingInterval)
+      ws.close()
+    }
+  }, [token])
 
   useEffect(() => {
     if (token) {
@@ -39,6 +85,21 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#FFFBF7] text-[#2D2D2D] flex flex-col">
+      {/* Match Reveal Notification */}
+      {wsMessage && wsMessage.type === 'match.revealed' && (
+        <div className="fixed top-16 left-4 right-4 z-50 rounded-2xl bg-[#FFD93D] px-4 py-3 shadow-lg shadow-[#FFD93D]/30 text-center"
+        >
+          <p className="text-sm font-bold text-[#2D2D2D]"
+          >
+            🎉 Match with {wsMessage.partner_name}!
+          </p>
+          <p className="text-xs text-[#2D2D2D]/80"
+          >
+            {wsMessage.recipe?.title}
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-[#F0E6E0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
