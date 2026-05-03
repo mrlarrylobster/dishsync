@@ -117,7 +117,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFBF7] text-[#2D2D2D] flex flex-col">
+    <div className="min-h-[100dvh] bg-[#FFFBF7] text-[#2D2D2D] flex flex-col overflow-x-hidden">
       <Toast
         message={toast.message}
         type={toast.type}

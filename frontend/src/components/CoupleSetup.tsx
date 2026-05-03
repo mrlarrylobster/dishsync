@@ -52,7 +52,7 @@ export default function CoupleSetup({ onComplete, showToast }: { onComplete: () 
 
   if (mode === 'choose') {
     return (
-      <div className="min-h-full flex flex-col items-center justify-center px-6 py-12">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-12">
         <div className="text-center mb-10">
           <div className="w-20 h-20 rounded-3xl bg-[#FF6B4A]/10 flex items-center justify-center mx-auto mb-4">
             <Heart size={36} className="text-[#FF6B4A]" />
@@ -98,7 +98,7 @@ export default function CoupleSetup({ onComplete, showToast }: { onComplete: () 
 
   if (mode === 'create') {
     return (
-      <div className="min-h-full flex flex-col items-center justify-center px-6 py-12">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-12">
         {!createdCode ? (
           <>
             <div className="text-center mb-8">
@@ -161,7 +161,7 @@ export default function CoupleSetup({ onComplete, showToast }: { onComplete: () 
 
   // Join mode
   return (
-    <div className="min-h-full flex flex-col items-center justify-center px-6 py-12">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-12">
       <div className="text-center mb-8">
         <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">Join Your Partner</h2>
         <p className="text-sm text-[#8C8C8C]">Enter the invite code they shared</p>

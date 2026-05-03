@@ -35,7 +35,7 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFBF7] flex flex-col items-center justify-center px-6 relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-[#FFFBF7] flex flex-col items-center justify-center px-6 relative overflow-hidden">
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-[#FF6B4A]/5 blur-3xl" />
