@@ -37,6 +37,7 @@ function App() {
   const [toast, setToast] = useState<ToastState>({ message: '', type: 'info', visible: false })
   const [showSplash, setShowSplash] = useState(!localStorage.getItem('dishpair_splash_seen'))
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [hasCouple, setHasCouple] = useState(true)
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true })
@@ -88,9 +89,15 @@ function App() {
     try {
       const { getCouple } = await import('./lib/api')
       const couple = await getCouple()
-      if (!couple) setView('setup')
+      if (!couple) {
+        setHasCouple(false)
+        setView('setup')
+      } else {
+        setHasCouple(true)
+      }
     } catch (err) {
       console.error(err)
+      setHasCouple(false)
       setView('setup')
     }
   }
@@ -112,6 +119,11 @@ function App() {
 
   const handleNav = (v: View) => {
     if (v === view) return
+    if (!hasCouple && v !== 'settings' && v !== 'setup') {
+      haptic('medium')
+      showToast('Link with your partner first! 💕', 'info')
+      return
+    }
     haptic('light')
     setIsTransitioning(true)
     setTimeout(() => {
@@ -165,7 +177,7 @@ function App() {
           transition: 'all 0.15s ease',
         }}
       >
-        {view === 'setup' && <CoupleSetup onComplete={() => setView('swipe')} showToast={showToast} />}
+        {view === 'setup' && <CoupleSetup onComplete={() => { setHasCouple(true); setView('swipe') }} showToast={showToast} />}
         {view === 'swipe' && <SwipeDeck showToast={showToast} />}
         {view === 'plan' && <PlanView showToast={showToast} />}
         {view === 'pantry' && <PantryView showToast={showToast} />}
@@ -179,6 +191,7 @@ function App() {
           icon={<Heart size={18} />} 
           label="Swipe" 
           active={view === 'swipe'} 
+          disabled={!hasCouple}
           onClick={() => handleNav('swipe')} 
         />
         <NavButton 
@@ -186,6 +199,7 @@ function App() {
           label="Plan" 
           active={view === 'plan'} 
           badge={badgeCounts.plan > 0 ? badgeCounts.plan : undefined}
+          disabled={!hasCouple}
           onClick={() => handleNav('plan')} 
         />
         <NavButton 
@@ -193,6 +207,7 @@ function App() {
           label="Shop" 
           active={view === 'grocery'} 
           badge={badgeCounts.shop > 0 ? badgeCounts.shop : undefined}
+          disabled={!hasCouple}
           onClick={() => handleNav('grocery')} 
         />
         <NavButton 
@@ -211,12 +226,14 @@ function NavButton({
   label, 
   active, 
   badge, 
+  disabled,
   onClick 
 }: { 
   icon: React.ReactNode; 
   label: string; 
   active: boolean; 
   badge?: number;
+  disabled?: boolean;
   onClick: () => void 
 }) {
   return (
@@ -224,8 +241,13 @@ function NavButton({
       onClick={onClick}
       role="tab"
       aria-selected={active}
+      disabled={disabled}
       className={`relative flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 min-w-[44px] min-h-[44px] ${
-        active ? 'text-[#FF6B4A]' : 'text-[#8C8C8C] hover:text-[#666666]'
+        disabled 
+          ? 'text-[#C4C4C4] cursor-not-allowed' 
+          : active 
+            ? 'text-[#FF6B4A]' 
+            : 'text-[#8C8C8C] hover:text-[#666666]'
       }`}
     >
       {icon}
