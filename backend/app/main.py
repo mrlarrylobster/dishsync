@@ -997,12 +997,6 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
     ).first()
     
     if not gl:
-        # Generate from calendar
-        cal = db.query(WeeklyCalendar).filter(
-            WeeklyCalendar.couple_id == couple.id,
-            WeeklyCalendar.week_start == week_start,
-        ).first()
-        
         gl = GroceryList(
             id=str(uuid.uuid4()),
             couple_id=couple.id,
@@ -1010,53 +1004,62 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
         )
         db.add(gl)
         db.flush()
+    
+    # Always regenerate from current calendar — meals may have changed
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == week_start,
+    ).first()
+    
+    # Clear old items
+    db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).delete(synchronize_session=False)
+    
+    if cal:
+        # Aggregate ingredients from scheduled matches
+        day_fields = ["monday_match_id", "tuesday_match_id", "wednesday_match_id",
+                     "thursday_match_id", "friday_match_id", "saturday_match_id", "sunday_match_id"]
+        ingredient_map = {}
         
-        if cal:
-            # Aggregate ingredients from scheduled matches
-            day_fields = ["monday_match_id", "tuesday_match_id", "wednesday_match_id",
-                         "thursday_match_id", "friday_match_id", "saturday_match_id", "sunday_match_id"]
-            ingredient_map = {}
-            
-            for field in day_fields:
-                match_id = getattr(cal, field)
-                if match_id:
-                    match = db.query(Match).filter(Match.id == match_id).first()
-                    if match:
-                        for ing in match.recipe.ingredients:
-                            key = ing.name
-                            if key not in ingredient_map:
-                                ingredient_map[key] = {
-                                    "quantity": ing.quantity or 0,
-                                    "unit": ing.unit,
-                                    "category": ing.category,
-                                    "recipe_ids": [match.recipe_id],
-                                }
-                            else:
-                                ingredient_map[key]["quantity"] += ing.quantity or 0
-                                ingredient_map[key]["recipe_ids"].append(match.recipe_id)
-            
-            # Subtract pantry items with high confidence
-            pantry = db.query(PantryItem).filter(
-                PantryItem.couple_id == couple.id,
-                PantryItem.confidence > 0.7,
-            ).all()
-            pantry_names = {p.ingredient_name.lower(): p for p in pantry}
-            
-            for name, data in ingredient_map.items():
-                if name.lower() not in pantry_names:
-                    gi = GroceryItem(
-                        id=str(uuid.uuid4()),
-                        grocery_list_id=gl.id,
-                        ingredient_name=name,
-                        quantity=data["quantity"],
-                        unit=data["unit"],
-                        category=data["category"],
-                        source_recipe_ids=data["recipe_ids"],
-                    )
-                    db.add(gi)
+        for field in day_fields:
+            match_id = getattr(cal, field)
+            if match_id:
+                match = db.query(Match).filter(Match.id == match_id).first()
+                if match:
+                    for ing in match.recipe.ingredients:
+                        key = ing.name
+                        if key not in ingredient_map:
+                            ingredient_map[key] = {
+                                "quantity": ing.quantity or 0,
+                                "unit": ing.unit,
+                                "category": ing.category,
+                                "recipe_ids": [match.recipe_id],
+                            }
+                        else:
+                            ingredient_map[key]["quantity"] += ing.quantity or 0
+                            ingredient_map[key]["recipe_ids"].append(match.recipe_id)
         
-        db.commit()
-        db.refresh(gl)
+        # Subtract pantry items with high confidence
+        pantry = db.query(PantryItem).filter(
+            PantryItem.couple_id == couple.id,
+            PantryItem.confidence > 0.7,
+        ).all()
+        pantry_names = {p.ingredient_name.lower(): p for p in pantry}
+        
+        for name, data in ingredient_map.items():
+            if name.lower() not in pantry_names:
+                gi = GroceryItem(
+                    id=str(uuid.uuid4()),
+                    grocery_list_id=gl.id,
+                    ingredient_name=name,
+                    quantity=data["quantity"],
+                    unit=data["unit"],
+                    category=data["category"],
+                    source_recipe_ids=data["recipe_ids"],
+                )
+                db.add(gi)
+    
+    db.commit()
+    db.refresh(gl)
     
     return {
         "id": gl.id,
