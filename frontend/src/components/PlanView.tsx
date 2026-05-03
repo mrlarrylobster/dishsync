@@ -258,22 +258,8 @@ export default function PlanView() {
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Days list — full width rows */}
-        <div className="space-y-3 mb-6">
-          {DAYS.map((day, i) => (
-            <DayRow
-              key={day}
-              day={day}
-              label={DAY_LABELS[i]}
-              match={dayMatches[day]}
-              onTap={() => dayMatches[day] && setSelectedRecipe(dayMatches[day]!.recipe)}
-              onRemove={() => handleRemove(day)}
-            />
-          ))}
-        </div>
-
-        {/* Pending matches pool */}
-        <div className="rounded-2xl bg-white border border-[#F0E6E0] p-4">
+        {/* Pending matches pool — on top */}
+        <div className="rounded-2xl bg-white border border-[#F0E6E0] p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Heart size={16} className="text-[#FF6B4A]" />
             <h3 className="text-sm font-bold text-[#2D2D2D]">Matches</h3>
@@ -295,6 +281,20 @@ export default function PlanView() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Days list — below */}
+        <div className="space-y-3">
+          {DAYS.map((day, i) => (
+            <DayRow
+              key={day}
+              day={day}
+              label={DAY_LABELS[i]}
+              match={dayMatches[day]}
+              onTap={() => dayMatches[day] && setSelectedRecipe(dayMatches[day]!.recipe)}
+              onRemove={() => handleRemove(day)}
+            />
+          ))}
         </div>
 
         <DragOverlay dropAnimation={null}>
