@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Clock, ChefHat, ArrowLeft } from 'lucide-react'
+import { useState } from 'react'
+import { Clock, ChefHat } from 'lucide-react'
 import { BottomSheet } from './BottomSheet'
 
 export interface Recipe {
@@ -24,22 +24,13 @@ interface RecipeDetailModalProps {
 export default function RecipeDetailModal({ recipe, onClose, onSchedule }: RecipeDetailModalProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
 
-  useEffect(() => {
-    if (recipe) {
-      document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
-    }
-  }, [recipe])
-
   if (!recipe) return null
 
   return (
-    <BottomSheet isOpen={true} onClose={onClose}>
-      {/* Hero Image */}
-      <div className="relative -mx-5 -mt-4 mb-4 aspect-[16/10] overflow-hidden rounded-t-3xl">
-        {!imageLoaded && (
-          <div className="absolute inset-0 skeleton" />
-        )}
+    <BottomSheet isOpen={true} onClose={onClose} title={recipe.title}>
+      {/* Compact Image */}
+      <div className="relative mb-4 rounded-2xl overflow-hidden bg-[#F0E6E0]" style={{ height: '180px' }}>
+        {!imageLoaded && <div className="absolute inset-0 skeleton" />}
         {recipe.image_url ? (
           <img
             src={recipe.image_url}
@@ -47,45 +38,34 @@ export default function RecipeDetailModal({ recipe, onClose, onSchedule }: Recip
             className="h-full w-full object-cover"
             style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
             onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(true)}
           />
         ) : (
-          <div className="h-full w-full bg-[#F0E6E0] flex items-center justify-center">
-            <ChefHat size={48} className="text-[#8C8C8C]/50" />
+          <div className="h-full w-full flex items-center justify-center">
+            <ChefHat size={40} className="text-[#8C8C8C]/50" />
           </div>
         )}
-        {/* Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-        
-        {/* Back button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 p-2 rounded-full bg-black/30 backdrop-blur-sm text-white active:scale-90 transition-transform"
-        >
-          <ArrowLeft size={20} />
-        </button>
-
-        {/* Title overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h2 className="text-xl font-bold text-white leading-tight drop-shadow-lg">
-            {recipe.title}
-          </h2>
-          <div className="flex items-center gap-3 mt-2">
-            <span className="flex items-center gap-1 rounded-full bg-white/20 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
-              <Clock size={12} />
-              {recipe.total_time_minutes}m
-            </span>
-            {recipe.tags?.map((tag) => (
-              <span key={tag} className="rounded-full bg-white/20 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
-                {tag}
-              </span>
-            ))}
-          </div>
+        {/* Time badge */}
+        <div className="absolute top-2 right-2 rounded-full bg-white/90 backdrop-blur-sm px-2.5 py-1 flex items-center gap-1 shadow-sm">
+          <Clock size={12} className="text-[#FF6B4A]" />
+          <span className="text-xs font-bold text-[#2D2D2D]">{recipe.total_time_minutes}m</span>
         </div>
       </div>
 
+      {/* Tags */}
+      {recipe.tags?.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {recipe.tags.slice(0, 4).map((tag) => (
+            <span key={tag} className="rounded-full bg-[#FFFBF7] border border-[#F0E6E0] px-2 py-0.5 text-[10px] font-medium text-[#8C8C8C]">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Ingredients */}
-      <div className="mb-5">
-        <h3 className="text-sm font-bold text-[#1A1A1A] uppercase tracking-wider mb-3">
+      <div className="mb-4">
+        <h3 className="text-xs font-bold text-[#1A1A1A] uppercase tracking-wider mb-2">
           Ingredients ({recipe.ingredients?.length || 0})
         </h3>
         {recipe.ingredients?.length === 0 ? (
@@ -101,14 +81,14 @@ export default function RecipeDetailModal({ recipe, onClose, onSchedule }: Recip
               }, {} as Record<string, typeof recipe.ingredients>)
             ).map(([category, items]) => (
               <div key={category}>
-                <p className="text-xs font-semibold text-[#FF6B4A] uppercase tracking-wider mb-1.5">
+                <p className="text-[10px] font-bold text-[#FF6B4A] uppercase tracking-wider mb-1">
                   {category}
                 </p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {items.map((ing, i) => (
                     <span
                       key={i}
-                      className="rounded-lg bg-[#FFFBF7] border border-[#F0E6E0] px-2.5 py-1 text-xs text-[#2D2D2D]"
+                      className="rounded-md bg-[#FFFBF7] border border-[#F0E6E0] px-2 py-0.5 text-xs text-[#2D2D2D]"
                     >
                       {ing.quantity && ing.unit
                         ? `${ing.quantity} ${ing.unit} ${ing.name}`
@@ -126,17 +106,17 @@ export default function RecipeDetailModal({ recipe, onClose, onSchedule }: Recip
 
       {/* Instructions */}
       {recipe.instructions && recipe.instructions.length > 0 && (
-        <div className="mb-5">
-          <h3 className="text-sm font-bold text-[#1A1A1A] uppercase tracking-wider mb-3">
+        <div className="mb-4">
+          <h3 className="text-xs font-bold text-[#1A1A1A] uppercase tracking-wider mb-2">
             Instructions
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {recipe.instructions.map((step, i) => (
-              <div key={i} className="flex gap-3">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-xs font-bold">
+              <div key={i} className="flex gap-2">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-[10px] font-bold">
                   {i + 1}
                 </div>
-                <p className="text-sm text-[#2D2D2D] leading-relaxed pt-0.5">{step}</p>
+                <p className="text-xs text-[#2D2D2D] leading-relaxed pt-0.5">{step}</p>
               </div>
             ))}
           </div>
@@ -147,7 +127,7 @@ export default function RecipeDetailModal({ recipe, onClose, onSchedule }: Recip
       {onSchedule && (
         <button
           onClick={() => { onSchedule(recipe.id); onClose() }}
-          className="w-full rounded-2xl bg-[#FF6B4A] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-transform"
+          className="w-full rounded-2xl bg-[#FF6B4A] py-3 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-transform"
         >
           📅 Schedule This Meal
         </button>
