@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Heart, ChefHat, ShoppingCart, Calendar } from 'lucide-react'
 import AuthScreen from './components/AuthScreen'
 import SwipeDeck from './components/SwipeDeck'
@@ -12,7 +12,26 @@ export type View = 'auth' | 'setup' | 'swipe' | 'calendar' | 'pantry' | 'grocery
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('dishsync_token'))
-  const [view, setView] = useState<View>(token ? 'swipe' : 'auth')
+  const [view, setView] = useState<View>('swipe')
+
+  useEffect(() => {
+    if (token) {
+      checkCouple()
+    }
+  }, [token])
+
+  async function checkCouple() {
+    try {
+      const { getCouple } = await import('./lib/api')
+      const couple = await getCouple()
+      if (!couple) {
+        setView('setup')
+      }
+    } catch (err) {
+      console.error(err)
+      setView('setup')
+    }
+  }
 
   if (!token) {
     return <AuthScreen onLogin={(t) => { setToken(t); localStorage.setItem('dishsync_token', t); setView('swipe') }} />
@@ -23,8 +42,8 @@ function App() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-[#F0E6E0] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ChefHat size={24} className="text-[#FF6B4A]" />
-          <h1 className="text-lg font-bold">DishSync</h1>
+          <Heart size={24} className="text-[#FF6B4A]" />
+          <h1 className="text-lg font-bold">DishPair</h1>
         </div>
         <button
           onClick={() => { localStorage.removeItem('dishsync_token'); setToken(null); setView('auth') }}
@@ -36,7 +55,7 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        {view === 'setup' && <CoupleSetup onComplete={() => setView('swipe')} />}
+        {view === 'setup' && <CoupleSetup onComplete={() => { setView('swipe') }} />}
         {view === 'swipe' && <SwipeDeck />}
         {view === 'calendar' && <CalendarView />}
         {view === 'pantry' && <PantryView />}

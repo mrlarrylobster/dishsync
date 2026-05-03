@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Check, Copy, Loader2, ShoppingCart } from 'lucide-react'
-import { getGroceryList, checkGroceryItem } from '../lib/api'
+import { Check, Copy, Loader2, ShoppingCart, Download } from 'lucide-react'
+import { getGroceryList, checkGroceryItem, exportGroceryList } from '../lib/api'
 
 export default function GroceryView() {
   const [list, setList] = useState<any>(null)
@@ -31,11 +31,22 @@ export default function GroceryView() {
     }
   }
 
-  function exportList() {
+  function copyList() {
     if (!list?.items) return
     const text = list.items.map((i: any) => `${i.is_checked ? '[x]' : '[ ]'} ${i.ingredient_name} ${i.quantity || ''} ${i.unit || ''}`).join('\n')
     navigator.clipboard.writeText(text)
     alert('Grocery list copied to clipboard!')
+  }
+
+  async function handleExport() {
+    try {
+      const data = await exportGroceryList()
+      await navigator.clipboard.writeText(data.text)
+      alert('Formatted grocery list copied to clipboard!')
+    } catch (err) {
+      console.error(err)
+      alert('Failed to export grocery list')
+    }
   }
 
   if (loading) {
@@ -68,13 +79,22 @@ export default function GroceryView() {
     <div className="px-4 py-4">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#2D2D2D]">Grocery List</h2>
-        <button
-          onClick={exportList}
-          className="flex items-center gap-1.5 rounded-full bg-[#4ECDC4] px-4 py-2 text-sm font-semibold text-white"
-        >
-          <Copy size={14} />
-          Copy
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-full bg-[#4ECDC4] px-4 py-2 text-sm font-semibold text-white"
+          >
+            <Download size={14} />
+            Export
+          </button>
+          <button
+            onClick={copyList}
+            className="flex items-center gap-1.5 rounded-full bg-[#FFD93D] px-4 py-2 text-sm font-semibold text-[#2D2D2D]"
+          >
+            <Copy size={14} />
+            Copy
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">
