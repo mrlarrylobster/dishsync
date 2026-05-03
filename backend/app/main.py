@@ -340,6 +340,10 @@ def _recipe_to_read(recipe: Recipe) -> dict:
     }
 
 
+# Spoonacular rate limit tracking
+_last_spoonacular_error = 0
+SPOONACULAR_COOLDOWN_SECONDS = 3600  # 1 hour cooldown after rate limit
+
 @app.get("/recipes/feed")
 def get_recipe_feed(
     limit: int = 20,
@@ -349,7 +353,7 @@ def get_recipe_feed(
 ):
     couple = get_couple_for_user(user, db)
     
-    # Get already swiped recipe IDs
+    # Get already swiped recipe IDs (last 30 days)
     swiped_ids = [
         s.recipe_id for s in db.query(Swipe).filter(
             Swipe.user_id == user.id,
@@ -357,11 +361,17 @@ def get_recipe_feed(
         ).all()
     ]
     
-    # Try to get from cache first
+    # Get from cache first
     recipes = db.query(Recipe).filter(~Recipe.id.in_(swiped_ids)).limit(limit).offset(offset).all()
     
-    # If cache is low, fetch from Spoonacular
-    if len(recipes) < limit and SPOONACULAR_API_KEY:
+    # Only hit Spoonacular if:
+    # 1. Cache is low (< limit)
+    # 2. API key is configured
+    # 3. Not in cooldown period after previous rate limit
+    global _last_spoonacular_error
+    in_cooldown = (datetime.utcnow().timestamp() - _last_spoonacular_error) < SPOONACULAR_COOLDOWN_SECONDS
+    
+    if len(recipes) < limit and SPOONACULAR_API_KEY and not in_cooldown:
         try:
             params = {
                 "number": limit - len(recipes),
@@ -375,15 +385,22 @@ def get_recipe_feed(
                 params["excludeIngredients"] = ",".join(couple.disliked_ingredients)
             
             resp = httpx.get("https://api.spoonacular.com/recipes/complexSearch", params=params, timeout=30)
-            if resp.status_code == 200:
+            
+            if resp.status_code == 429:
+                # Rate limited — enter cooldown
+                _last_spoonacular_error = datetime.utcnow().timestamp()
+                print("Spoonacular rate limited — entering 1-hour cooldown")
+            elif resp.status_code == 200:
                 for r in resp.json().get("results", []):
-                    # Check if already in DB
                     existing = db.query(Recipe).filter(Recipe.spoonacular_id == r["id"]).first()
                     if not existing:
                         _spoonacular_to_recipe(r, db)
                 db.commit()
-                # Re-fetch
+                # Re-fetch from DB after adding new recipes
                 recipes = db.query(Recipe).filter(~Recipe.id.in_(swiped_ids)).limit(limit).offset(offset).all()
+            else:
+                print(f"Spoonacular error: {resp.status_code} - {resp.text[:200]}")
+                
         except Exception as e:
             print(f"Spoonacular fetch error: {e}")
     
@@ -392,12 +409,25 @@ def get_recipe_feed(
     result = []
     for r in recipes:
         is_stretch = r.total_time_minutes > budget
-        if r.total_time_minutes <= budget * 1.5:  # Show up to 50% over budget as stretch
+        if r.total_time_minutes <= budget * 1.5:
             result.append({
                 **_recipe_to_read(r),
                 "is_stretch": is_stretch,
                 "stretch_minutes": max(0, r.total_time_minutes - budget) if is_stretch else 0,
             })
+    
+    # If we have no recipes at all (everything swiped OR all remaining are over budget)
+    if len(result) == 0:
+        # Return previously swiped recipes (they'll swipe again) that pass budget
+        all_recipes = db.query(Recipe).limit(limit).offset(offset).all()
+        for r in all_recipes:
+            is_stretch = r.total_time_minutes > budget
+            if r.total_time_minutes <= budget * 1.5:
+                result.append({
+                    **_recipe_to_read(r),
+                    "is_stretch": is_stretch,
+                    "stretch_minutes": max(0, r.total_time_minutes - budget) if is_stretch else 0,
+                })
     
     return {"recipes": result[:limit]}
 
