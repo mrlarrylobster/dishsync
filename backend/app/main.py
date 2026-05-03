@@ -1119,15 +1119,37 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
                 if match:
                     for ing in match.recipe.ingredients:
                         key = ing.name
+                        # Sanitize quantity — handle ranges like "2-3" or strings
+                        raw_qty = ing.quantity
+                        if raw_qty is None:
+                            qty = 0.0
+                        elif isinstance(raw_qty, str):
+                            if '-' in raw_qty:
+                                parts = raw_qty.split('-')
+                                try:
+                                    qty = float(parts[-1])
+                                except ValueError:
+                                    qty = 0.0
+                            else:
+                                try:
+                                    qty = float(raw_qty)
+                                except ValueError:
+                                    qty = 0.0
+                        else:
+                            try:
+                                qty = float(raw_qty)
+                            except (ValueError, TypeError):
+                                qty = 0.0
+                        
                         if key not in ingredient_map:
                             ingredient_map[key] = {
-                                "quantity": ing.quantity or 0,
+                                "quantity": qty,
                                 "unit": ing.unit,
                                 "category": ing.category,
                                 "recipe_ids": [match.recipe_id],
                             }
                         else:
-                            ingredient_map[key]["quantity"] += ing.quantity or 0
+                            ingredient_map[key]["quantity"] += qty
                             ingredient_map[key]["recipe_ids"].append(match.recipe_id)
         
         # Subtract pantry items with high confidence
