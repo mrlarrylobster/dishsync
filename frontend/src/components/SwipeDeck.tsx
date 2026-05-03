@@ -79,9 +79,15 @@ export default function SwipeDeck({ showToast }: SwipeDeckProps) {
       setDragX(0)
       setDragY(0)
       setRecycled(data.recycled || false)
-    } catch (err) {
-      console.error(err)
-      showToast('Failed to load recipes.', 'error')
+    } catch (err: any) {
+      console.error('Feed error:', err)
+      if (err.message?.includes('401')) {
+        showToast('Session expired. Please sign in again.', 'error')
+        localStorage.removeItem('dishsync_token')
+        window.location.reload()
+      } else {
+        showToast('Failed to load recipes.', 'error')
+      }
     } finally {
       setLoading(false)
     }

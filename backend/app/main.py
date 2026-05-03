@@ -98,11 +98,11 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return user
 
 
-def get_couple_for_user(user: User, db: Session) -> Couple:
+def get_couple_for_user(user: User, db: Session, required: bool = True) -> Couple | None:
     couple = db.query(Couple).filter(
         (Couple.partner_1_id == user.id) | (Couple.partner_2_id == user.id)
     ).first()
-    if not couple:
+    if not couple and required:
         raise HTTPException(status_code=404, detail="No couple found. Create or join one first.")
     return couple
 
@@ -247,7 +247,9 @@ def join_couple(payload: CoupleJoin, user: User = Depends(get_current_user), db:
 
 @app.get("/couples/me", response_model=dict)
 def get_my_couple(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        return None
     partner_1 = db.query(User).filter(User.id == couple.partner_1_id).first()
     partner_2 = db.query(User).filter(User.id == couple.partner_2_id).first() if couple.partner_2_id else None
     
@@ -355,7 +357,7 @@ def get_recipe_feed(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
     
     # Get already swiped recipe IDs (last 30 days)
     swiped_ids = [
@@ -500,7 +502,7 @@ def create_swipe(payload: SwipeCreate, user: User = Depends(get_current_user), d
     db.refresh(swipe)
     
     # Check for match (if partner also swiped right)
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
     if couple and payload.direction == "right" and couple.partner_2_id:
         partner_id = couple.partner_1_id if couple.partner_2_id == user.id else couple.partner_2_id
         partner_swipe = db.query(Swipe).filter(
@@ -554,7 +556,9 @@ def create_swipe(payload: SwipeCreate, user: User = Depends(get_current_user), d
 # ─── Matches ───
 @app.get("/matches")
 def get_matches(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        return {"matches": []}
     matches = db.query(Match).options(joinedload(Match.recipe)).filter(
         Match.couple_id == couple.id,
         Match.status.in_(["pending", "scheduled"]),
@@ -700,7 +704,22 @@ def _get_match_detail(match_id, db):
 
 @app.get("/calendar/current")
 def get_current_calendar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+        return {
+            "id": None,
+            "week_start": str(week_start),
+            "monday": None,
+            "tuesday": None,
+            "wednesday": None,
+            "thursday": None,
+            "friday": None,
+            "saturday": None,
+            "sunday": None,
+            "is_locked": False,
+        }
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     cal = _get_or_create_calendar(couple.id, week_start, db)
@@ -1014,7 +1033,9 @@ def _palate_variation(matches):
 # ─── Pantry ───
 @app.get("/pantry")
 def get_pantry(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        return {"items": []}
     items = db.query(PantryItem).filter(PantryItem.couple_id == couple.id).all()
     return {
         "items": [
@@ -1056,7 +1077,9 @@ def add_pantry_item(payload: PantryItemCreate, user: User = Depends(get_current_
 # ─── Grocery ───
 @app.get("/grocery/current")
 def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    couple = get_couple_for_user(user, db)
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        return {"items": []}
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     

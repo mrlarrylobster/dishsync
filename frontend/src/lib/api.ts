@@ -74,6 +74,7 @@ export async function getRecipeFeed(limit = 20) {
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    console.error('Feed API error:', res.status, text)
     throw new Error(`Failed to fetch recipes (${res.status}): ${text.slice(0, 100)}`)
   }
   return res.json()
