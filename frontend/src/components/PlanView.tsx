@@ -13,7 +13,9 @@ import {
 } from '@dnd-kit/core'
 import { Sparkles, Trash2, Loader2, Clock, GripVertical, Heart } from 'lucide-react'
 import { getCalendar, getMatches, autoSchedule, requestVeto, moveMatch, scheduleMatch } from '../lib/api'
+import { haptic } from '../lib/haptic'
 import RecipeDetailModal from './RecipeDetailModal'
+import { SkeletonList } from './Skeleton'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -118,7 +120,7 @@ function DayRow({
   )
 }
 
-export default function PlanView() {
+export default function PlanView({ showToast }: { showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [calendar, setCalendar] = useState<any>(null)
   const [pendingMatches, setPendingMatches] = useState<Match[]>([])
   const [loading, setLoading] = useState(true)
@@ -164,9 +166,12 @@ export default function PlanView() {
     setAutoScheduling(true)
     try {
       await autoSchedule()
+      haptic('success')
+      showToast('Auto-scheduled meals for the week!', 'success')
       loadData()
     } catch (err) {
       console.error(err)
+      showToast('Auto-schedule failed. Try again.', 'error')
     } finally {
       setAutoScheduling(false)
     }
@@ -175,31 +180,38 @@ export default function PlanView() {
   async function handleRemove(day: string) {
     try {
       await requestVeto(day)
+      haptic('medium')
+      showToast(`Removed from ${day.charAt(0).toUpperCase() + day.slice(1)}`, 'info')
       loadData()
     } catch (err) {
       console.error(err)
+      showToast('Failed to remove meal.', 'error')
     }
   }
 
   async function handleMove(matchId: string, fromDay: string, toDay: string) {
     try {
       await moveMatch(matchId, fromDay, toDay)
+      haptic('success')
       setFlashMessage(`Moved to ${toDay.charAt(0).toUpperCase() + toDay.slice(1)} ✓`)
       setTimeout(() => setFlashMessage(null), 2000)
       loadData()
     } catch (err) {
       console.error('Move failed:', err)
+      showToast('Failed to move meal.', 'error')
     }
   }
 
   async function handleSchedule(matchId: string, day: string) {
     try {
       await scheduleMatch(matchId, day)
+      haptic('success')
       setFlashMessage(`Scheduled for ${day.charAt(0).toUpperCase() + day.slice(1)} ✓`)
       setTimeout(() => setFlashMessage(null), 2000)
       loadData()
     } catch (err) {
       console.error('Schedule failed:', err)
+      showToast('Failed to schedule meal.', 'error')
     }
   }
 
@@ -242,8 +254,23 @@ export default function PlanView() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-[#FF6B4A]" />
+      <div className="px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="h-7 skeleton w-32 rounded-lg" />
+          <div className="h-9 skeleton w-28 rounded-xl" />
+        </div>
+        <div className="rounded-2xl bg-white border border-[#F0E6E0] p-4 mb-6">
+          <div className="h-5 skeleton w-24 rounded-lg mb-3" />
+          <SkeletonList count={3} />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border-2 border-[#F0E6E0] bg-white p-3">
+              <div className="h-4 skeleton w-8 rounded-lg mb-2" />
+              <div className="h-16 skeleton rounded-xl" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

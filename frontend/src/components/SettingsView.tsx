@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Users, Copy, Check, Clock, Loader2, Save, RotateCcw, AlertTriangle } from 'lucide-react'
 import { getCouple, updateCouple, resetCoupleData } from '../lib/api'
+import { haptic } from '../lib/haptic'
 
-export default function SettingsView({ onSignOut }: { onSignOut: () => void }) {
+export default function SettingsView({ onSignOut, showToast }: { onSignOut: () => void; showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [couple, setCouple] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -33,8 +34,11 @@ export default function SettingsView({ onSignOut }: { onSignOut: () => void }) {
     try {
       await updateCouple({ time_budget_minutes: timeBudget })
       setCouple({ ...couple, time_budget_minutes: timeBudget })
+      haptic('success')
+      showToast('Time budget saved!', 'success')
     } catch (err) {
       console.error(err)
+      showToast('Failed to save budget.', 'error')
     } finally {
       setSaving(false)
     }
@@ -44,12 +48,13 @@ export default function SettingsView({ onSignOut }: { onSignOut: () => void }) {
     setResetting(true)
     try {
       await resetCoupleData()
+      haptic('success')
+      showToast('All data reset. Recipes are back in your deck!', 'success')
       setShowResetConfirm(false)
-      // Refresh couple data
       await loadCouple()
     } catch (err) {
       console.error(err)
-      alert('Reset failed. Please try again.')
+      showToast('Reset failed. Please try again.', 'error')
     } finally {
       setResetting(false)
     }
@@ -58,6 +63,8 @@ export default function SettingsView({ onSignOut }: { onSignOut: () => void }) {
   function copyInviteCode() {
     if (couple?.invite_code) {
       navigator.clipboard.writeText(couple.invite_code)
+      haptic('light')
+      showToast('Invite code copied!', 'success')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }

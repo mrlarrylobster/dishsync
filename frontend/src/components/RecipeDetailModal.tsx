@@ -1,13 +1,6 @@
-import { X, Clock, ShoppingCart, ChefHat, Flame } from 'lucide-react'
-
-interface Ingredient {
-  name: string
-  original_name?: string
-  quantity?: number
-  unit?: string
-  category: string
-  is_perishable?: boolean
-}
+import { useEffect, useState } from 'react'
+import { Clock, ChefHat, ArrowLeft } from 'lucide-react'
+import { BottomSheet } from './BottomSheet'
 
 export interface Recipe {
   id: string
@@ -16,7 +9,7 @@ export interface Recipe {
   image_url?: string
   total_time_minutes: number
   tags: string[]
-  ingredients: Ingredient[]
+  ingredients: { name: string; category: string; quantity?: string; unit?: string; original_name?: string }[]
   instructions?: string[]
   is_stretch?: boolean
   stretch_minutes?: number
@@ -25,144 +18,140 @@ export interface Recipe {
 interface RecipeDetailModalProps {
   recipe: Recipe | null
   onClose: () => void
-  synergy?: {
-    overlap_count: number
-    overlap_items: string[]
-    reason: string
-  }
+  onSchedule?: (recipeId: string) => void
 }
 
-export default function RecipeDetailModal({ recipe, onClose, synergy, onSchedule }: RecipeDetailModalProps & { onSchedule?: (recipe: Recipe) => void }) {
+export default function RecipeDetailModal({ recipe, onClose, onSchedule }: RecipeDetailModalProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+
+  useEffect(() => {
+    if (recipe) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [recipe])
+
   if (!recipe) return null
 
-  const categories = [...new Set(recipe.ingredients.map(i => i.category))]
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div 
-        className="w-full max-w-lg bg-[#FFFBF7] rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Image header */}
-        <div className="relative h-56 shrink-0">
-          {recipe.image_url ? (
-            <img src={recipe.image_url} alt={recipe.title} className="w-full h-full object-cover rounded-t-3xl sm:rounded-t-3xl" />
-          ) : (
-            <div className="w-full h-full bg-[#F0E6E0] flex items-center justify-center rounded-t-3xl">
-              <ChefHat size={48} className="text-[#8C8C8C]" />
-            </div>
-          )}
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-black/40 text-white backdrop-blur"
-          >
-            <X size={20} />
-          </button>
-          
-          {/* Stretch badge */}
-          {recipe.is_stretch && (
-            <div className="absolute top-4 left-4 flex items-center gap-1 rounded-full bg-[#FFD93D] px-3 py-1.5 text-xs font-bold text-[#2D2D2D]">
-              <Flame size={14} />
-              +{recipe.stretch_minutes} min stretch
-            </div>
-          )}
-        </div>
+    <BottomSheet isOpen={true} onClose={onClose}>
+      {/* Hero Image */}
+      <div className="relative -mx-5 -mt-4 mb-4 aspect-[16/10] overflow-hidden rounded-t-3xl">
+        {!imageLoaded && (
+          <div className="absolute inset-0 skeleton" />
+        )}
+        {recipe.image_url ? (
+          <img
+            src={recipe.image_url}
+            alt={recipe.title}
+            className="h-full w-full object-cover"
+            style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
+            onLoad={() => setImageLoaded(true)}
+          />
+        ) : (
+          <div className="h-full w-full bg-[#F0E6E0] flex items-center justify-center">
+            <ChefHat size={48} className="text-[#8C8C8C]/50" />
+          </div>
+        )}
+        {/* Gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        
+        {/* Back button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 left-4 p-2 rounded-full bg-black/30 backdrop-blur-sm text-white active:scale-90 transition-transform"
+        >
+          <ArrowLeft size={20} />
+        </button>
 
-        {/* Content */}
-        <div className="p-5">
-          {/* Title + tags */}
-          <h2 className="text-xl font-bold text-[#2D2D2D] mb-2">{recipe.title}</h2>
-          
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {recipe.tags?.map(tag => (
-              <span key={tag} className="px-2 py-1 rounded-full bg-[#4ECDC4]/10 text-[#4ECDC4] text-xs font-medium">
+        {/* Title overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h2 className="text-xl font-bold text-white leading-tight drop-shadow-lg">
+            {recipe.title}
+          </h2>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="flex items-center gap-1 rounded-full bg-white/20 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
+              <Clock size={12} />
+              {recipe.total_time_minutes}m
+            </span>
+            {recipe.tags?.map((tag) => (
+              <span key={tag} className="rounded-full bg-white/20 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
                 {tag}
               </span>
             ))}
           </div>
+        </div>
+      </div>
 
-          {/* Meta row */}
-          <div className="flex items-center gap-4 mb-4 text-sm text-[#8C8C8C]">
-            <span className="flex items-center gap-1">
-              <Clock size={16} className="text-[#FF6B4A]" />
-              {recipe.total_time_minutes} min
-            </span>
-            <span className="flex items-center gap-1">
-              <ShoppingCart size={16} className="text-[#4ECDC4]" />
-              {recipe.ingredients.length} ingredients
-            </span>
-          </div>
-
-          {/* Synergy badge */}
-          {synergy && synergy.overlap_count > 0 && (
-            <div className="mb-4 p-3 rounded-2xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20">
-              <p className="text-sm text-[#2D2D2D]">
-                <span className="font-semibold">🛒 Smart match:</span> {synergy.reason}
-              </p>
-              <p className="text-xs text-[#8C8C8C] mt-1">
-                You already have: {synergy.overlap_items.join(", ")}
-              </p>
-            </div>
-          )}
-
-          {/* Ingredients by category */}
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-[#8C8C8C] uppercase tracking-wider mb-3">Ingredients</h3>
-            
-            {categories.map(cat => (
-              <div key={cat} className="mb-3">
-                <p className="text-xs font-semibold text-[#4ECDC4] uppercase mb-1.5">{cat}</p>
-                <div className="space-y-1.5">
-                  {recipe.ingredients
-                    .filter(i => i.category === cat)
-                    .map((ing, idx) => (
-                      <div key={idx} className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white border border-[#F0E6E0]">
-                        <span className="text-sm text-[#2D2D2D]">{ing.name}</span>
-                        <span className="text-xs text-[#8C8C8C]">
-                          {ing.quantity ? `${ing.quantity} ${ing.unit || ''}` : ing.original_name || ''}
-                        </span>
-                      </div>
-                    ))}
+      {/* Ingredients */}
+      <div className="mb-5">
+        <h3 className="text-sm font-bold text-[#1A1A1A] uppercase tracking-wider mb-3">
+          Ingredients ({recipe.ingredients?.length || 0})
+        </h3>
+        {recipe.ingredients?.length === 0 ? (
+          <p className="text-sm text-[#8C8C8C]">No ingredients listed.</p>
+        ) : (
+          <div className="space-y-2">
+            {Object.entries(
+              (recipe.ingredients || []).reduce((acc, ing) => {
+                const cat = ing.category || 'other'
+                acc[cat] = acc[cat] || []
+                acc[cat].push(ing)
+                return acc
+              }, {} as Record<string, typeof recipe.ingredients>)
+            ).map(([category, items]) => (
+              <div key={category}>
+                <p className="text-xs font-semibold text-[#FF6B4A] uppercase tracking-wider mb-1.5">
+                  {category}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {items.map((ing, i) => (
+                    <span
+                      key={i}
+                      className="rounded-lg bg-[#FFFBF7] border border-[#F0E6E0] px-2.5 py-1 text-xs text-[#2D2D2D]"
+                    >
+                      {ing.quantity && ing.unit
+                        ? `${ing.quantity} ${ing.unit} ${ing.name}`
+                        : ing.quantity
+                        ? `${ing.quantity} ${ing.name}`
+                        : ing.original_name || ing.name}
+                    </span>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Instructions */}
-          {recipe.instructions && recipe.instructions.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-sm font-bold text-[#8C8C8C] uppercase tracking-wider mb-3">Instructions</h3>
-              <div className="space-y-3">
-                {recipe.instructions.map((step, idx) => (
-                  <div key={idx} className="flex gap-3">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FF6B4A] text-xs font-bold text-white">
-                      {idx + 1}
-                    </div>
-                    <p className="text-sm text-[#2D2D2D] leading-relaxed pt-0.5">{step}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Description if available */}
-          {recipe.description && (
-            <div className="mb-4">
-              <h3 className="text-sm font-bold text-[#8C8C8C] uppercase tracking-wider mb-2">About</h3>
-              <p className="text-sm text-[#2D2D2D] leading-relaxed">{recipe.description}</p>
-            </div>
-          )}
-          {/* Schedule action */}
-          {onSchedule && (
-            <button
-              onClick={() => { onSchedule(recipe); onClose(); }}
-              className="mt-2 w-full rounded-2xl bg-[#FF6B4A] py-3 text-sm font-semibold text-white active:scale-95 shadow-lg shadow-[#FF6B4A]/20"
-            >
-              📅 Schedule This Meal
-            </button>
-          )}
-        </div>
+        )}
       </div>
-    </div>
+
+      {/* Instructions */}
+      {recipe.instructions && recipe.instructions.length > 0 && (
+        <div className="mb-5">
+          <h3 className="text-sm font-bold text-[#1A1A1A] uppercase tracking-wider mb-3">
+            Instructions
+          </h3>
+          <div className="space-y-3">
+            {recipe.instructions.map((step, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FF6B4A]/10 text-[#FF6B4A] text-xs font-bold">
+                  {i + 1}
+                </div>
+                <p className="text-sm text-[#2D2D2D] leading-relaxed pt-0.5">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Schedule button */}
+      {onSchedule && (
+        <button
+          onClick={() => { onSchedule(recipe.id); onClose() }}
+          className="w-full rounded-2xl bg-[#FF6B4A] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-transform"
+        >
+          📅 Schedule This Meal
+        </button>
+      )}
+    </BottomSheet>
   )
 }

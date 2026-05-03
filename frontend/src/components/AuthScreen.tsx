@@ -1,161 +1,164 @@
 import { useState } from 'react'
-import { Heart, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react'
+import { ChefHat, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { login, register } from '../lib/api'
+import { haptic } from '../lib/haptic'
 
 export default function AuthScreen({ onLogin }: { onLogin: (token: string) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [isRegister, setIsRegister] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [focusedField, setFocusedField] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError('')
+    setLoading(true)
+    haptic('medium')
+
     try {
-      if (mode === 'login') {
-        const data = await login(email, password)
-        onLogin(data.token)
-      } else {
-        const data = await register(email, password, name)
-        onLogin(data.token)
+      if (isRegister) {
+        await register(email, password, displayName || '')
       }
+      const data = await login(email, password)
+      haptic('success')
+      onLogin(data.access_token)
     } catch (err: any) {
-      setError(err.message || 'Something went wrong')
+      haptic('error')
+      setError(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#FFFBF7] px-4 py-8">
-      <div className="mb-8 flex flex-col items-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[#FF6B4A]/10 text-4xl shadow-sm">
-          <Heart className="text-[#FF6B4A]" size={40} />
-        </div>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#2D2D2D]">DishPair</h1>
-        <p className="mt-1 text-sm text-[#8C8C8C]">Stop negotiating dinner. Start matching on it.</p>
+    <div className="min-h-screen bg-[#FFFBF7] flex flex-col items-center justify-center px-6 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-[#FF6B4A]/5 blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full bg-[#4ECDC4]/5 blur-3xl" />
       </div>
 
-      <div className="w-full max-w-[360px] rounded-[1.5rem] border border-[#FF6B4A]/10 bg-white p-6 shadow-[0_16px_48px_rgba(255,107,74,0.08)]">
-        <div className="mb-5 flex gap-2 rounded-full bg-[#FFFBF7] p-1">
-          <button
-            onClick={() => setMode('login')}
-            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              mode === 'login'
-                ? 'bg-[#FF6B4A] text-white shadow-sm'
-                : 'text-[#8C8C8C] hover:text-[#2D2D2D]'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => setMode('register')}
-            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              mode === 'register'
-                ? 'bg-[#FF6B4A] text-white shadow-sm'
-                : 'text-[#8C8C8C] hover:text-[#2D2D2D]'
-            }`}
-          >
-            Join
-          </button>
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="relative mb-4">
+            <div className="absolute inset-0 bg-[#FF6B4A] rounded-3xl blur-xl opacity-30 animate-pulse" />
+            <div className="relative w-20 h-20 bg-[#FF6B4A] rounded-3xl flex items-center justify-center shadow-lg shadow-[#FF6B4A]/20">
+              <ChefHat size={36} className="text-white" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-[#1A1A1A] tracking-tight">DishPair</h1>
+          <p className="mt-2 text-sm text-[#8C8C8C]">Decide together. Cook together.</p>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
-
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#8C8C8C]">
+          {isRegister && (
+            <div className="relative">
+              <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
                 Name
               </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8C8C]" size={18} />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="Your name"
-                  className="w-full rounded-2xl border border-[#FF6B4A]/15 bg-[#FFFBF7] py-3 pl-11 pr-4 text-sm text-[#2D2D2D] outline-none transition focus:border-[#FF6B4A]/40 focus:ring-2 focus:ring-[#FF6B4A]/10"
-                />
-              </div>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onFocus={() => setFocusedField('name')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Your name"
+                className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+                  focusedField === 'name' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
+                }`}
+              />
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#8C8C8C]">
+          <div className="relative">
+            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
               Email
             </label>
-            <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8C8C]" size={18} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                className="w-full rounded-2xl border border-[#FF6B4A]/15 bg-[#FFFBF7] py-3 pl-11 pr-4 text-sm text-[#2D2D2D] outline-none transition focus:border-[#FF6B4A]/40 focus:ring-2 focus:ring-[#FF6B4A]/10"
-              />
-            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onFocus={() => setFocusedField('email')}
+              onBlur={() => setFocusedField(null)}
+              placeholder="you@example.com"
+              required
+              className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+                focusedField === 'email' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
+              }`}
+            />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#8C8C8C]">
+          <div className="relative">
+            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8C8C]" size={18} />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
                 placeholder="••••••••"
-                className="w-full rounded-2xl border border-[#FF6B4A]/15 bg-[#FFFBF7] py-3 pl-11 pr-4 text-sm text-[#2D2D2D] outline-none transition focus:border-[#FF6B4A]/40 focus:ring-2 focus:ring-[#FF6B4A]/10"
+                required
+                className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 pr-12 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+                  focusedField === 'password' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
+                }`}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#8C8C8C] hover:text-[#666666] transition-colors rounded-lg hover:bg-[#F0E6E0]"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
+
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 animate-[shake_0.4s_ease-in-out]">
+              {error}
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF6B4A] py-3.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(255,107,74,0.25)] transition hover:bg-[#e85d3d] active:scale-[0.98] disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#FF6B4A] py-4 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-all disabled:opacity-50 hover:bg-[#FF5A3A]"
           >
             {loading ? (
-              <Loader2 size={18} className="animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                {mode === 'login' ? 'Sign In' : 'Create Account'}
+                {isRegister ? 'Create Account' : 'Sign In'}
                 <ArrowRight size={16} />
               </>
             )}
           </button>
         </form>
 
-        <p className="mt-5 text-center text-xs text-[#8C8C8C]">
-          {mode === 'login' ? (
-            <>
-              New here?{' '}
-              <button onClick={() => setMode('register')} className="font-semibold text-[#FF6B4A] hover:underline">
-                Create an account
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button onClick={() => setMode('login')} className="font-semibold text-[#FF6B4A] hover:underline">
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+        {/* Toggle */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => { setIsRegister(!isRegister); setError(''); haptic('light') }}
+            className="text-sm text-[#8C8C8C] hover:text-[#FF6B4A] transition-colors"
+          >
+            {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
+        </div>
+
+        {/* Test account hint */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-[#C4C4C4]">
+            Test account: admin@dishpair.app / 123
+          </p>
+        </div>
       </div>
     </div>
   )
