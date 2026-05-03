@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Heart, ShoppingCart, Calendar, Users, Settings } from 'lucide-react'
+import { Heart, ShoppingCart, Calendar, Settings } from 'lucide-react'
 import AuthScreen from './components/AuthScreen'
 import SwipeDeck from './components/SwipeDeck'
-import CalendarView from './components/CalendarView'
+import PlanView from './components/PlanView'
 import PantryView from './components/PantryView'
 import GroceryView from './components/GroceryView'
 import CoupleSetup from './components/CoupleSetup'
-import MatchesView from './components/MatchesView'
 import SettingsView from './components/SettingsView'
 import './index.css'
 
-export type View = 'auth' | 'setup' | 'swipe' | 'matches' | 'calendar' | 'pantry' | 'grocery' | 'settings'
+export type View = 'auth' | 'setup' | 'swipe' | 'plan' | 'pantry' | 'grocery' | 'settings'
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('dishsync_token'))
@@ -89,18 +88,16 @@ function App() {
       <main className="flex-1 overflow-y-auto">
         {view === 'setup' && <CoupleSetup onComplete={() => setView('swipe')} />}
         {view === 'swipe' && <SwipeDeck />}
-        {view === 'matches' && <MatchesView />}
-        {view === 'calendar' && <CalendarView />}
+        {view === 'plan' && <PlanView />}
         {view === 'pantry' && <PantryView />}
         {view === 'grocery' && <GroceryView />}
         {view === 'settings' && <SettingsView />}
       </main>
 
-      {/* Bottom Nav - 5 items */}
+      {/* Bottom Nav - 4 items */}
       <nav className="sticky bottom-0 z-40 bg-white border-t border-[#F0E6E0] px-2 py-2 flex justify-around">
         <NavButton icon={<Heart size={18} />} label="Swipe" active={view === 'swipe'} onClick={() => setView('swipe')} />
-        <NavButton icon={<Users size={18} />} label="Matches" active={view === 'matches'} onClick={() => setView('matches')} />
-        <NavButton icon={<Calendar size={18} />} label="Plan" active={view === 'calendar'} onClick={() => setView('calendar')} />
+        <NavButton icon={<Calendar size={18} />} label="Plan" active={view === 'plan'} onClick={() => setView('plan')} />
         <NavButton icon={<ShoppingCart size={18} />} label="Shop" active={view === 'grocery'} onClick={() => setView('grocery')} />
         <NavButton icon={<Settings size={18} />} label="Settings" active={view === 'settings'} onClick={() => setView('settings')} />
       </nav>
