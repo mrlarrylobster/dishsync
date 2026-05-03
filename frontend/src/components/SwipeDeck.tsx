@@ -15,6 +15,55 @@ interface Recipe {
   stretch_minutes: number
 }
 
+// Common pantry staples most households already have
+const PANTRY_STAPLES = [
+  'salt', 'pepper', 'oil', 'olive oil', 'vegetable oil', 'butter', 'garlic',
+  'onion', 'egg', 'eggs', 'flour', 'sugar', 'milk', 'water', 'soy sauce',
+  'vinegar', 'honey', 'rice', 'pasta', 'bread', 'tomato', 'potato', 'carrot',
+  'lemon', 'lime', 'ginger', 'chili', 'chilli', 'cumin', 'paprika', 'oregano',
+  'basil', 'thyme', 'rosemary', 'cinnamon', 'nutmeg', 'stock', 'broth',
+  'mustard', 'ketchup', 'mayonnaise', 'cream', 'yogurt', 'cheese', 'cheddar',
+  'parmesan', 'mozzarella', 'baking powder', 'baking soda', 'yeast',
+  'cornstarch', 'cornflour', 'vanilla', 'cocoa', 'chocolate', 'coffee',
+  'tea', 'brown sugar', 'powdered sugar', 'caster sugar', 'granulated sugar',
+  'white wine vinegar', 'balsamic vinegar', 'apple cider vinegar',
+  'red wine vinegar', 'rice vinegar', 'coconut oil', 'sesame oil',
+  'vegetable stock', 'chicken stock', 'beef stock', 'fish stock',
+  'dried oregano', 'dried basil', 'dried thyme', 'bay leaf', 'bay leaves',
+  'black pepper', 'white pepper', 'sea salt', 'kosher salt', 'table salt',
+]
+
+function getPantryOverlap(ingredients: { name: string }[]): string[] {
+  const overlap: string[] = []
+  for (const ing of ingredients) {
+    const nameLower = ing.name.toLowerCase()
+    for (const staple of PANTRY_STAPLES) {
+      if (nameLower.includes(staple.toLowerCase())) {
+        // Capitalize first letter for display
+        overlap.push(ing.name)
+        break
+      }
+    }
+  }
+  // Deduplicate and limit to 4
+  return [...new Set(overlap)].slice(0, 4)
+}
+
+function PantrySynergyBadge({ ingredients }: { ingredients: { name: string }[] }) {
+  const overlap = getPantryOverlap(ingredients)
+  if (overlap.length === 0) return null
+
+  return (
+    <div
+      className="mt-2 mx-4 rounded-xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20 px-3 py-2"
+    >
+      <p className="text-xs text-[#2D2D2D]">
+        <span className="font-semibold">🛒 Already have:</span> {overlap.join(', ')}
+      </p>
+    </div>
+  )
+}
+
 export default function SwipeDeck() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -305,17 +354,8 @@ export default function SwipeDeck() {
             </div>
           </div>
 
-          {/* Synergy info */}
-          {recipe.ingredients && recipe.ingredients.length > 0 && (
-            <div 
-              className="mt-2 mx-4 rounded-xl bg-[#4ECDC4]/10 border border-[#4ECDC4]/20 px-3 py-2"
-              onClick={() => setSelectedRecipe(recipe)}
-            >
-              <p className="text-xs text-[#2D2D2D]">
-                <span className="font-semibold">🛒 Smart tip:</span> Uses common pantry ingredients
-              </p>
-            </div>
-          )}
+          {/* Smart pantry overlap badge */}
+          <PantrySynergyBadge ingredients={recipe.ingredients} />
 
           {/* Info section */}
           <div className="p-5 flex flex-col justify-between h-[45%]">
