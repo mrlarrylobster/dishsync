@@ -44,22 +44,22 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-10">
+        <div className="flex flex-col items-center mb-8">
           <div className="relative mb-4">
             <div className="absolute inset-0 bg-[#FF6B4A] rounded-3xl blur-xl opacity-30 animate-pulse" />
-            <div className="relative w-20 h-20 bg-[#FF6B4A] rounded-3xl flex items-center justify-center shadow-lg shadow-[#FF6B4A]/20">
-              <ChefHat size={36} className="text-white" />
+            <div className="relative w-16 h-16 bg-[#FF6B4A] rounded-2xl flex items-center justify-center shadow-lg shadow-[#FF6B4A]/20">
+              <ChefHat size={28} className="text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-[#1A1A1A] tracking-tight">DishPair</h1>
-          <p className="mt-2 text-sm text-[#8C8C8C]">Decide together. Cook together.</p>
+          <h1 className="text-2xl font-bold text-[#1A1A1A] tracking-tight">DishPair</h1>
+          <p className="mt-1 text-xs text-[#8C8C8C]">Decide together. Cook together.</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {isRegister && (
-            <div className="relative">
-              <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
+            <div>
+              <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1 block">
                 Name
               </label>
               <input
@@ -69,15 +69,15 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
                 onFocus={() => setFocusedField('name')}
                 onBlur={() => setFocusedField(null)}
                 placeholder="Your name"
-                className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+                className={`w-full rounded-2xl border-2 bg-white px-4 py-3 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
                   focusedField === 'name' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
                 }`}
               />
             </div>
           )}
 
-          <div className="relative">
-            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
+          <div>
+            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1 block">
               Email
             </label>
             <input
@@ -88,14 +88,14 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
               onBlur={() => setFocusedField(null)}
               placeholder="you@example.com"
               required
-              className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+              className={`w-full rounded-2xl border-2 bg-white px-4 py-3 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
                 focusedField === 'email' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
               }`}
             />
           </div>
 
-          <div className="relative">
-            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1.5 block">
+          <div>
+            <label className="text-xs font-semibold text-[#8C8C8C] uppercase tracking-wider mb-1 block">
               Password
             </label>
             <div className="relative">
@@ -107,7 +107,7 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
                 onBlur={() => setFocusedField(null)}
                 placeholder="••••••••"
                 required
-                className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 pr-12 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
+                className={`w-full rounded-2xl border-2 bg-white px-4 py-3 pr-12 text-sm text-[#2D2D2D] placeholder-[#C4C4C4] outline-none transition-all ${
                   focusedField === 'password' ? 'border-[#FF6B4A] shadow-lg shadow-[#FF6B4A]/10' : 'border-[#F0E6E0]'
                 }`}
               />
@@ -130,7 +130,7 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#FF6B4A] py-4 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-all disabled:opacity-50 hover:bg-[#FF5A3A]"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#FF6B4A] py-3 text-sm font-semibold text-white shadow-lg shadow-[#FF6B4A]/25 active:scale-95 transition-all disabled:opacity-50 hover:bg-[#FF5A3A]"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -144,18 +144,18 @@ export default function AuthScreen({ onLogin }: { onLogin: (token: string) => vo
         </form>
 
         {/* Toggle */}
-        <div className="mt-6 text-center">
+        <div className="mt-4 text-center">
           <button
             onClick={() => { setIsRegister(!isRegister); setError(''); haptic('light') }}
-            className="text-sm text-[#8C8C8C] hover:text-[#FF6B4A] transition-colors"
+            className="text-xs text-[#8C8C8C] hover:text-[#FF6B4A] transition-colors"
           >
             {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
         </div>
 
         {/* Test account hint */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-[#C4C4C4]">
+        <div className="mt-6 text-center">
+          <p className="text-[11px] text-[#C4C4C4]">
             Test account: admin@dishpair.app / 123
           </p>
         </div>
