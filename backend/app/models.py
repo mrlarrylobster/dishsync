@@ -81,9 +81,12 @@ class Match(Base):
     couple_id = Column(String(36), ForeignKey("couples.id"), nullable=False)
     recipe_id = Column(String(36), ForeignKey("recipes.id"), nullable=False)
     partner_1_swipe_id = Column(String(36), ForeignKey("swipes.id"), nullable=False)
-    partner_2_swipe_id = Column(String(36), ForeignKey("swipes.id"), nullable=True)  # null for single-user
-    status = Column(String(20), nullable=False, default="pending")  # pending, scheduled, cooked, removed
+    partner_2_swipe_id = Column(String(36), ForeignKey("swipes.id"), nullable=True)
+    status = Column(String(20), nullable=False, default="pending")
     matched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    recipe = relationship("Recipe", foreign_keys=[recipe_id])
+    couple = relationship("Couple", foreign_keys=[couple_id])
 
 
 class WeeklyCalendar(Base):

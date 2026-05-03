@@ -487,8 +487,18 @@ def create_swipe(payload: SwipeCreate, user: User = Depends(get_current_user), d
 @app.get("/matches")
 def get_matches(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     couple = get_couple_for_user(user, db)
-    matches = db.query(Match).filter(Match.couple_id == couple.id).all()
-    return {"matches": [_recipe_to_read(m.recipe) for m in matches]}
+    matches = db.query(Match).options(joinedload(Match.recipe)).filter(
+        Match.couple_id == couple.id,
+        Match.status.in_(["pending", "scheduled"]),
+    ).all()
+    return {"matches": [
+        {
+            "match_id": m.id,
+            "status": m.status,
+            **_recipe_to_read(m.recipe),
+        }
+        for m in matches
+    ]}
 
 
 # ─── Calendar ───
@@ -509,6 +519,19 @@ def _get_or_create_calendar(couple_id: str, week_start: date, db: Session) -> We
     return cal
 
 
+def _get_match_detail(match_id, db):
+    if not match_id:
+        return None
+    m = db.query(Match).options(joinedload(Match.recipe)).filter(Match.id == match_id).first()
+    if not m:
+        return None
+    return {
+        "id": m.id,
+        "status": m.status,
+        "recipe": _recipe_to_read(m.recipe),
+    }
+
+
 @app.get("/calendar/current")
 def get_current_calendar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     couple = get_couple_for_user(user, db)
@@ -516,22 +539,16 @@ def get_current_calendar(user: User = Depends(get_current_user), db: Session = D
     week_start = today - timedelta(days=today.weekday())
     cal = _get_or_create_calendar(couple.id, week_start, db)
     
-    def _get_match(match_id):
-        if not match_id:
-            return None
-        m = db.query(Match).filter(Match.id == match_id).first()
-        return {"id": m.id, "recipe": _recipe_to_read(m.recipe)} if m else None
-    
     return {
         "id": cal.id,
         "week_start": str(cal.week_start),
-        "monday": _get_match(cal.monday_match_id),
-        "tuesday": _get_match(cal.tuesday_match_id),
-        "wednesday": _get_match(cal.wednesday_match_id),
-        "thursday": _get_match(cal.thursday_match_id),
-        "friday": _get_match(cal.friday_match_id),
-        "saturday": _get_match(cal.saturday_match_id),
-        "sunday": _get_match(cal.sunday_match_id),
+        "monday": _get_match_detail(cal.monday_match_id, db),
+        "tuesday": _get_match_detail(cal.tuesday_match_id, db),
+        "wednesday": _get_match_detail(cal.wednesday_match_id, db),
+        "thursday": _get_match_detail(cal.thursday_match_id, db),
+        "friday": _get_match_detail(cal.friday_match_id, db),
+        "saturday": _get_match_detail(cal.saturday_match_id, db),
+        "sunday": _get_match_detail(cal.sunday_match_id, db),
         "is_locked": cal.is_locked,
     }
 
@@ -1032,7 +1049,35 @@ def get_recipe_image(recipe_id: str, db: Session = Depends(get_db)):
     raise HTTPException(status_code=404, detail="No image available")
 
 
-# ─── Grocery Export ───
+# ─── Clear Calendar ───
+@app.post("/calendar/clear")
+def clear_calendar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    couple = get_couple_for_user(user, db)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == week_start,
+    ).first()
+    if not cal:
+        return {"cleared": 0}
+
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    cleared = 0
+    for day in days:
+        field = f"{day}_match_id"
+        match_id = getattr(cal, field)
+        if match_id:
+            match = db.query(Match).filter(Match.id == match_id).first()
+            if match:
+                match.status = "pending"
+            setattr(cal, field, None)
+            cleared += 1
+
+    db.commit()
+    return {"cleared": cleared}
+
+
 @app.get("/grocery/export")
 def export_grocery(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     couple = get_couple_for_user(user, db)

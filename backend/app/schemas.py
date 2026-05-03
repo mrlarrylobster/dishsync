@@ -98,7 +98,6 @@ class CalendarDay(str):
 
 
 class ScheduleMatch(BaseModel):
-    match_id: str
     day: str  # monday, tuesday, etc.
 
 

@@ -217,6 +217,29 @@ export async function resolveVeto(veto_id: string, approve: boolean) {
   return res.json()
 }
 
+/* ─── Calendar ─── */
+
+export async function clearCalendar() {
+  const res = await fetch(`${API_BASE}/calendar/clear`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to clear calendar')
+  return res.json()
+}
+
+/* ─── Couple Settings ─── */
+
+export async function updateCouple(updates: { time_budget_minutes?: number; dietary_restrictions?: string[]; disliked_ingredients?: string[] }) {
+  const res = await fetch(`${API_BASE}/couples/me`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!res.ok) throw new Error('Failed to update couple')
+  return res.json()
+}
+
 /* ─── Pantry Decay ─── */
 
 export async function triggerPantryDecay() {
