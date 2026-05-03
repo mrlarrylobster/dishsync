@@ -373,9 +373,10 @@ def get_recipe_feed(
     # Combine exclusions
     excluded_ids = list(set(swiped_ids + matched_ids))
     
-    # Get from cache — random order for variety
+    # Get from cache — random order for variety, only recipes WITH images
     from sqlalchemy import func
-    query = db.query(Recipe).filter(~Recipe.id.in_(excluded_ids)) if excluded_ids else db.query(Recipe)
+    base_query = db.query(Recipe).filter(Recipe.image_url.isnot(None))
+    query = base_query.filter(~Recipe.id.in_(excluded_ids)) if excluded_ids else base_query
     recipes = query.order_by(func.random()).limit(limit).offset(offset).all()
     
     # Only hit Spoonacular if cache is low
