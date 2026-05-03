@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Users, Copy, Check, Clock, Loader2 } from 'lucide-react'
-import { getCouple } from '../lib/api'
+import { Users, Copy, Check, Clock, Loader2, Save } from 'lucide-react'
+import { getCouple, updateCouple } from '../lib/api'
 
 export default function SettingsView() {
   const [couple, setCouple] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [timeBudget, setTimeBudget] = useState(60)
 
   useEffect(() => {
     loadCouple()
@@ -16,10 +18,23 @@ export default function SettingsView() {
     try {
       const data = await getCouple()
       setCouple(data)
+      setTimeBudget(data?.time_budget_minutes || 60)
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSaveBudget() {
+    setSaving(true)
+    try {
+      await updateCouple({ time_budget_minutes: timeBudget })
+      setCouple({ ...couple, time_budget_minutes: timeBudget })
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -78,13 +93,38 @@ export default function SettingsView() {
         <label className="text-xs font-semibold uppercase tracking-wider text-[#8C8C8C] mb-2 block">
           Time Budget
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-4">
           <Clock size={18} className="text-[#FF6B4A]" />
           <span className="text-2xl font-bold text-[#2D2D2D]">
-            {couple.time_budget_minutes}
+            {timeBudget}
           </span>
           <span className="text-sm text-[#8C8C8C]">minutes per meal</span>
         </div>
+
+        <input
+          type="range"
+          min={15}
+          max={120}
+          step={5}
+          value={timeBudget}
+          onChange={(e) => setTimeBudget(Number(e.target.value))}
+          className="w-full h-2 bg-[#F0E6E0] rounded-lg appearance-none cursor-pointer accent-[#FF6B4A]"
+        />
+        <div className="flex justify-between text-xs text-[#8C8C8C] mt-1">
+          <span>15 min</span>
+          <span>120 min</span>
+        </div>
+
+        {timeBudget !== couple.time_budget_minutes && (
+          <button
+            onClick={handleSaveBudget}
+            disabled={saving}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B4A] py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save Budget
+          </button>
+        )}
       </div>
 
       {/* Partner Info */}
