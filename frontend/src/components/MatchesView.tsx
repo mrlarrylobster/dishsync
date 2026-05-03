@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Heart, Clock, ChefHat, Loader2, CalendarDays, ArrowRight } from 'lucide-react'
-import { getMatches, scheduleMatch } from '../lib/api'
+import { Heart, Clock, ChefHat, Loader2, CalendarDays, ArrowRight, Trash2 } from 'lucide-react'
+import { getMatches, scheduleMatch, deleteMatch } from '../lib/api'
 import RecipeDetailModal, { Recipe } from './RecipeDetailModal'
 
 interface Match {
@@ -24,6 +24,7 @@ export default function MatchesView() {
   const [schedulingId, setSchedulingId] = useState<string | null>(null)
   const [showDayPicker, setShowDayPicker] = useState<string | null>(null)
   const [selectedRecipe, setSelectedRecipe] = useState<Match | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     loadMatches()
@@ -53,6 +54,18 @@ export default function MatchesView() {
       console.error(err)
     } finally {
       setSchedulingId(null)
+    }
+  }
+
+  async function handleDelete(matchId: string) {
+    setDeletingId(matchId)
+    try {
+      await deleteMatch(matchId)
+      loadMatches()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -125,14 +138,28 @@ export default function MatchesView() {
                     ))}
                   </div>
                 ) : (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowDayPicker(match.match_id); }}
-                    className="flex items-center gap-1 mt-2 text-xs font-semibold text-[#FF6B4A]"
-                  >
-                    <CalendarDays size={14} />
-                    Schedule
-                    <ArrowRight size={14} />
-                  </button>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowDayPicker(match.match_id); }}
+                      className="flex items-center gap-1 text-xs font-semibold text-[#FF6B4A]"
+                    >
+                      <CalendarDays size={14} />
+                      Schedule
+                      <ArrowRight size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(match.match_id); }}
+                      disabled={deletingId === match.match_id}
+                      className="flex items-center gap-1 text-xs font-semibold text-red-500 active:scale-95 disabled:opacity-50"
+                    >
+                      {deletingId === match.match_id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      Delete
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

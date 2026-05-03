@@ -32,11 +32,10 @@ interface DayData {
   }
 }
 
-// Draggable meal card
-function MealCard({ dayData, isOverlay = false }: { dayData: DayData; isOverlay?: boolean }) {
+// Drag handle component — only the GripVertical icon is draggable
+function DragHandle({ matchId }: { matchId: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: dayData.id,
-    data: { dayData },
+    id: matchId,
   })
 
   return (
@@ -44,20 +43,39 @@ function MealCard({ dayData, isOverlay = false }: { dayData: DayData; isOverlay?
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex items-center gap-3 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm ${
+      className={`p-2 rounded-lg touch-none ${
         isDragging ? 'opacity-50' : ''
-      } ${isOverlay ? 'shadow-xl scale-105 rotate-2 cursor-grabbing' : 'cursor-grab active:cursor-grabbing'} transition-transform`}
+      }`}
+      style={{ touchAction: 'none' }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-2">
-        <GripVertical size={16} className="text-[#8C8C8C] shrink-0" />
-        {dayData.recipe.image_url ? (
-          <img src={dayData.recipe.image_url} alt="" className="h-10 w-10 rounded-lg object-cover shrink-0" />
-        ) : (
-          <div className="h-10 w-10 rounded-lg bg-[#FFFBF7] flex items-center justify-center shrink-0">
-            <Clock size={14} className="text-[#8C8C8C]" />
-          </div>
-        )}
-      </div>
+      <GripVertical size={18} className="text-[#8C8C8C] shrink-0" />
+    </div>
+  )
+}
+
+// Meal card — tap body to open modal, drag handle to move
+function MealCard({ dayData, onClick }: { dayData: DayData; onClick: () => void }) {
+  return (
+    <div
+      className="flex items-center gap-2 p-3 rounded-xl bg-white border border-[#F0E6E0] shadow-sm cursor-pointer active:scale-[0.98] transition-transform"
+      onClick={onClick}
+    >
+      <DragHandle matchId={dayData.id} />
+      
+      {dayData.recipe.image_url ? (
+        <img
+          src={dayData.recipe.image_url}
+          alt=""
+          className="h-10 w-10 rounded-lg object-cover shrink-0"
+          draggable={false}
+        />
+      ) : (
+        <div className="h-10 w-10 rounded-lg bg-[#FFFBF7] flex items-center justify-center shrink-0">
+          <Clock size={14} className="text-[#8C8C8C]" />
+        </div>
+      )}
+      
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[#2D2D2D] truncate">
           {dayData.recipe.title}
@@ -80,14 +98,12 @@ function DaySlot({
   dayData,
   onClickRecipe,
   onRemove,
-  isActive,
 }: {
   day: string
   label: string
   dayData?: DayData
   onClickRecipe: (recipe: any) => void
   onRemove: (day: string) => void
-  isActive: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: day })
 
@@ -97,7 +113,7 @@ function DaySlot({
       className={`rounded-2xl border-2 p-3 transition-colors ${
         isOver
           ? 'border-[#4ECDC4] bg-[#4ECDC4]/10'
-          : isActive
+          : dayData
           ? 'border-[#4ECDC4]/30 bg-[#4ECDC4]/5'
           : 'border-[#F0E6E0] bg-white'
       }`}
@@ -115,13 +131,16 @@ function DaySlot({
       </div>
 
       {dayData ? (
-        <div onClick={() => onClickRecipe(dayData.recipe)}>
-          <MealCard dayData={dayData} />
-        </div>
+        <MealCard
+          dayData={dayData}
+          onClick={() => onClickRecipe(dayData.recipe)}
+        />
       ) : (
-        <div className={`h-16 rounded-xl border-2 border-dashed flex items-center justify-center ${
-          isOver ? 'border-[#4ECDC4] bg-[#4ECDC4]/5' : 'border-[#E8E8E8] bg-[#FFFBF7]'
-        }`}>
+        <div
+          className={`h-16 rounded-xl border-2 border-dashed flex items-center justify-center ${
+            isOver ? 'border-[#4ECDC4] bg-[#4ECDC4]/5' : 'border-[#E8E8E8] bg-[#FFFBF7]'
+          }`}
+        >
           <span className="text-xs text-[#8C8C8C]">Drop here</span>
         </div>
       )}
@@ -134,15 +153,15 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [autoScheduling, setAutoScheduling] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<any>(null)
-  const [activeDrag, setActiveDrag] = useState<DayData | null>(null)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
   // Touch + pointer sensors for mobile & desktop
   const sensors = useSensors(
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 10 },
+      activationConstraint: { delay: 150, tolerance: 5 },
     }),
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
+      activationConstraint: { distance: 3 },
     })
   )
 
@@ -193,31 +212,29 @@ export default function CalendarView() {
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const data = event.active.data.current?.dayData as DayData
-    if (data) {
-      setActiveDrag(data)
-    }
+    setActiveDragId(event.active.id as string)
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    setActiveDrag(null)
+    setActiveDragId(null)
 
     if (!over) return
 
-    const fromDay = active.id as string
+    const matchId = active.id as string
     const toDay = over.id as string
 
-    if (fromDay === toDay) return
+    // Find which day this match is currently on
+    const fromDay = DAYS.find((d) => calendar?.[d]?.id === matchId)
+    if (!fromDay || fromDay === toDay) return
 
-    // fromDay is the match ID, but we need the actual day name
-    // Find which day this match is on
-    const dayName = DAYS.find((d) => calendar?.[d]?.id === fromDay)
-    if (!dayName) return
-
-    const matchId = fromDay
-    handleMove(matchId, dayName, toDay)
+    handleMove(matchId, fromDay, toDay)
   }
+
+  // Get the data for the currently dragged item (for DragOverlay)
+  const activeDragData = activeDragId
+    ? DAYS.map((d) => calendar?.[d]).find((d) => d?.id === activeDragId)
+    : null
 
   if (loading) {
     return (
@@ -261,19 +278,30 @@ export default function CalendarView() {
                 dayData={dayData}
                 onClickRecipe={setSelectedRecipe}
                 onRemove={handleRemove}
-                isActive={!!dayData}
               />
             )
           })}
         </div>
 
-        <DragOverlay>
-          {activeDrag ? <MealCard dayData={activeDrag} isOverlay /> : null}
+        <DragOverlay dropAnimation={null}>
+          {activeDragData ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-white border-2 border-[#4ECDC4] shadow-xl opacity-90 cursor-grabbing">
+              <GripVertical size={18} className="text-[#4ECDC4] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[#2D2D2D] truncate">
+                  {activeDragData.recipe.title}
+                </p>
+                <span className="text-xs text-[#8C8C8C]">
+                  {activeDragData.recipe.total_time_minutes} min
+                </span>
+              </div>
+            </div>
+          ) : null}
         </DragOverlay>
       </DndContext>
 
       <p className="mt-4 text-center text-xs text-[#8C8C8C]">
-        Drag and drop meals to reorder. Tap to view details.
+        Long-press the grip icon (⋮⋮) to drag. Tap card to view details.
       </p>
 
       <RecipeDetailModal

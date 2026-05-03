@@ -569,6 +569,35 @@ def get_matches(user: User = Depends(get_current_user), db: Session = Depends(ge
     return {"matches": result}
 
 
+@app.delete("/matches/{match_id}")
+def delete_match(match_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete a match entirely (removes from both pending and scheduled)."""
+    couple = get_couple_for_user(user, db)
+    match = db.query(Match).filter(Match.id == match_id, Match.couple_id == couple.id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    # If scheduled, clear from calendar
+    if match.status == "scheduled":
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+        cal = db.query(WeeklyCalendar).filter(
+            WeeklyCalendar.couple_id == couple.id,
+            WeeklyCalendar.week_start == week_start,
+        ).first()
+        if cal:
+            for day in DAYS:
+                field = f"{day}_match_id"
+                if getattr(cal, field) == match_id:
+                    setattr(cal, field, None)
+                    break
+    
+    db.delete(match)
+    db.commit()
+    
+    return {"ok": True, "message": "Match deleted"}
+
+
 # ─── Calendar ───
 def _get_or_create_calendar(couple_id: str, week_start: date, db: Session) -> WeeklyCalendar:
     cal = db.query(WeeklyCalendar).filter(
@@ -1236,6 +1265,39 @@ def clear_calendar(user: User = Depends(get_current_user), db: Session = Depends
 
     db.commit()
     return {"cleared": cleared}
+
+
+@app.post("/calendar/remove/{day}")
+def remove_meal(day: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Immediately remove a meal from the calendar and put match back to pending."""
+    couple = get_couple_for_user(user, db)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == week_start,
+    ).first()
+    
+    if not cal:
+        raise HTTPException(status_code=404, detail="No calendar found")
+    
+    day = day.lower()
+    if day not in DAYS:
+        raise HTTPException(status_code=400, detail="Invalid day")
+    
+    field = f"{day}_match_id"
+    match_id = getattr(cal, field)
+    if not match_id:
+        raise HTTPException(status_code=404, detail="No meal scheduled for this day")
+    
+    match = db.query(Match).filter(Match.id == match_id, Match.couple_id == couple.id).first()
+    if match:
+        match.status = "pending"
+    
+    setattr(cal, field, None)
+    db.commit()
+    
+    return {"ok": True, "message": f"Removed from {day}. Match is back in your matches list."}
 
 
 @app.get("/grocery/export")

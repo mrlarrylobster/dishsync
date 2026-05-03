@@ -211,11 +211,22 @@ export async function getRecipeImageUrl(recipe_id: string) {
 /* ─── Veto ─── */
 
 export async function requestVeto(day: string) {
-  const res = await fetch(`${API_BASE}/calendar/${day}`, {
+  const res = await fetch(`${API_BASE}/calendar/remove/${day}`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to remove meal')
+  return res.json()
+}
+
+/* ─── Delete Match ─── */
+
+export async function deleteMatch(match_id: string) {
+  const res = await fetch(`${API_BASE}/matches/${match_id}`, {
     method: 'DELETE',
     headers: authHeaders(),
   })
-  if (!res.ok) throw new Error('Failed to request veto')
+  if (!res.ok) throw new Error('Failed to delete match')
   return res.json()
 }
 
