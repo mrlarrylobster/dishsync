@@ -150,6 +150,16 @@ export default function SwipeDeck() {
     setIsDragging(false)
 
     const threshold = 100
+    const tapThreshold = 10
+    const totalDrag = Math.sqrt(dragX * dragX + dragY * dragY)
+    
+    // Tap detection: small movement = open detail
+    if (totalDrag < tapThreshold) {
+      setDragX(0)
+      setDragY(0)
+      return
+    }
+    
     if (dragX > threshold) {
       finishSwipe('right')
     } else if (dragX < -threshold) {
@@ -159,7 +169,7 @@ export default function SwipeDeck() {
       setDragX(0)
       setDragY(0)
     }
-  }, [isDragging, dragX, finishSwipe])
+  }, [isDragging, dragX, dragY, finishSwipe])
 
   // Touch events
   const onTouchStart = (e: React.TouchEvent) => {
@@ -304,12 +314,20 @@ export default function SwipeDeck() {
           </div>
 
           {/* Image (55% height) */}
-          <div className="relative h-[55%] w-full">
+          <div 
+            className="relative h-[55%] w-full cursor-pointer"
+            onClick={() => {
+              // Only open if not dragging
+              if (!isDragging && Math.abs(dragX) < 5) {
+                setSelectedRecipe(recipe)
+              }
+            }}
+          >
             {recipe.image_url ? (
               <img
                 src={recipe.image_url}
                 alt={recipe.title}
-                className="h-full w-full object-cover pointer-events-none"
+                className="h-full w-full object-cover"
                 draggable={false}
                 onError={(e) => {
                   e.currentTarget.style.display = 'none'
