@@ -1,4 +1,4 @@
-const API_BASE = ''
+const API_BASE = '/api'
 
 function getToken() {
   return localStorage.getItem('dishsync_token')
