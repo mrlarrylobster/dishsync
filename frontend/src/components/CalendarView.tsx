@@ -16,6 +16,7 @@ interface DayData {
     total_time_minutes: number
     tags: string[]
     ingredients?: { name: string; category: string }[]
+    instructions?: string[]
   }
 }
 
@@ -148,14 +149,7 @@ export default function CalendarView() {
               {dayData ? (
                 <div 
                   className="flex-1 min-w-0"
-                  onClick={() => setSelectedRecipe({
-                    id: dayData.id,
-                    title: dayData.recipe.title,
-                    image_url: dayData.recipe.image_url,
-                    total_time_minutes: dayData.recipe.total_time_minutes,
-                    tags: dayData.recipe.tags,
-                    ingredients: dayData.recipe.ingredients || []
-                  })}
+                  onClick={() => setSelectedRecipe(dayData.recipe)}
                 >
                   <p className="text-sm font-medium text-[#2D2D2D] truncate">
                     {dayData.recipe.title}

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Heart, Clock, ChefHat, Loader2, CalendarDays, ArrowRight } from 'lucide-react'
 import { getMatches, scheduleMatch } from '../lib/api'
-import RecipeDetailModal from './RecipeDetailModal'
+import RecipeDetailModal, { Recipe } from './RecipeDetailModal'
 
 interface Match {
   match_id: string
+  id?: string  // alias for recipe id
   title: string
   image_url?: string
   total_time_minutes: number
   tags: string[]
   status: string
   ingredients?: { name: string; category: string }[]
+  instructions?: string[]
 }
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -146,8 +148,9 @@ export default function MatchesView() {
           image_url: selectedRecipe.image_url,
           total_time_minutes: selectedRecipe.total_time_minutes,
           tags: selectedRecipe.tags,
-          ingredients: selectedRecipe.ingredients || []
-        } : null}
+          ingredients: selectedRecipe.ingredients || [],
+          instructions: selectedRecipe.instructions,
+        } as Recipe : null}
         onClose={() => setSelectedRecipe(null)}
       />
     </div>

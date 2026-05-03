@@ -9,7 +9,7 @@ interface Ingredient {
   is_perishable?: boolean
 }
 
-interface Recipe {
+export interface Recipe {
   id: string
   title: string
   description?: string
