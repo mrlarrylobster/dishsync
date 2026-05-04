@@ -2,22 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Heart, X, Clock, Flame, ChefHat, Sparkles, Info, ArrowRight, ArrowLeft } from 'lucide-react'
 import { getRecipeFeed, swipeRecipe } from '../lib/api'
 import { haptic } from '../lib/haptic'
-import RecipeDetailModal from './RecipeDetailModal'
+import RecipeDetailModal, { Recipe } from './RecipeDetailModal'
 import { SkeletonCard } from './Skeleton'
 import { MatchConfetti } from './MatchConfetti'
-
-interface Recipe {
-  id: string
-  title: string
-  description?: string
-  image_url?: string
-  total_time_minutes: number
-  tags: string[]
-  ingredients: { name: string; category: string }[]
-  instructions?: string[]
-  is_stretch: boolean
-  stretch_minutes: number
-}
 
 const PANTRY_STAPLES = [
   'salt', 'pepper', 'oil', 'olive oil', 'vegetable oil', 'butter', 'garlic',

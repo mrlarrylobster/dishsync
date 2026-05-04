@@ -14,21 +14,11 @@ import {
 import { Sparkles, Trash2, Loader2, Clock, GripVertical, Heart } from 'lucide-react'
 import { getCalendar, getMatches, autoSchedule, requestVeto, moveMatch, scheduleMatch } from '../lib/api'
 import { haptic } from '../lib/haptic'
-import RecipeDetailModal from './RecipeDetailModal'
+import RecipeDetailModal, { Recipe } from './RecipeDetailModal'
 import { SkeletonList } from './Skeleton'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-interface Recipe {
-  id: string
-  title: string
-  image_url?: string
-  total_time_minutes: number
-  tags: string[]
-  ingredients: { name: string; category: string }[]
-  instructions?: string[]
-}
 
 interface Match {
   match_id: string
