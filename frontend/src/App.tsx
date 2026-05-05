@@ -126,7 +126,7 @@ function App() {
       />
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-[#F0E6E0] px-4 py-3 flex items-center justify-between select-none">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-[#F0E6E0] px-4 pt-[env(safe-area-inset-top)] pb-3 flex items-center justify-between select-none">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-[#FF6B4A]/10 flex items-center justify-center">
             <Heart size={16} className="text-[#FF6B4A]" />
@@ -162,7 +162,7 @@ function App() {
       </main>
 
       {/* Bottom Nav */}
-      <nav className="sticky bottom-0 z-40 bg-white border-t border-[#F0E6E0] px-2 py-2 flex justify-around select-none" role="tablist">
+      <nav className="sticky bottom-0 z-40 bg-white border-t border-[#F0E6E0] px-2 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] flex justify-around select-none" role="tablist">
         <NavButton 
           icon={<Heart size={18} />} 
           label="Swipe" 

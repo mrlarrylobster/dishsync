@@ -238,7 +238,7 @@ export default function SwipeDeck({ showToast }: SwipeDeckProps) {
 
       {/* Card Stack */}
       <div className="flex-1 flex items-center justify-center px-3 py-2">
-        <div className="relative w-full max-w-sm" style={{ maxHeight: 'calc(100dvh - 148px)' }}>
+        <div className="relative w-full max-w-sm" style={{ maxHeight: 'calc(100dvh - 180px)' }}>
           {/* Background card */}
           {next && (
             <div className="absolute inset-0 rounded-2xl bg-white shadow-sm overflow-hidden scale-[0.95] translate-y-1 opacity-50">
@@ -252,7 +252,7 @@ export default function SwipeDeck({ showToast }: SwipeDeckProps) {
           <div
             className="relative rounded-2xl bg-white shadow-lg overflow-hidden touch-none flex flex-col"
             style={{
-              maxHeight: 'calc(100dvh - 148px)',
+              maxHeight: 'calc(100dvh - 180px)',
               transform: `translateX(${dragX}px) translateY(${dragY}px) rotate(${dragX * 0.05}deg)`,
               transition: isDragging.current ? 'none' : 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             }}

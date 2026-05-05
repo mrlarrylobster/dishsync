@@ -1103,6 +1103,10 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
         WeeklyCalendar.week_start == week_start,
     ).first()
     
+    # Save checked states before clearing so we can restore them
+    existing_items = db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).all()
+    checked_names = {item.ingredient_name.lower() for item in existing_items if item.is_checked}
+    
     # Clear old items
     db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).delete(synchronize_session=False)
     
@@ -1169,6 +1173,7 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
                     unit=data["unit"],
                     category=data["category"],
                     source_recipe_ids=data["recipe_ids"],
+                    is_checked=name.lower() in checked_names,  # restore checked state
                 )
                 db.add(gi)
     
