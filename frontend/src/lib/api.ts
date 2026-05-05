@@ -317,3 +317,12 @@ export async function markAllGroceryItems(checked: boolean) {
   if (!res.ok) throw new Error('Failed to mark all items')
   return res.json()
 }
+
+export async function regenerateGroceryList() {
+  const res = await fetch(`${API_BASE}/grocery/regenerate`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to regenerate list')
+  return res.json()
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ShoppingCart, Copy, Check } from 'lucide-react'
-import { getGroceryList, checkGroceryItem, clearCheckedGroceryItems, markAllGroceryItems } from '../lib/api'
+import { ShoppingCart, Copy, Check, RefreshCw } from 'lucide-react'
+import { getGroceryList, checkGroceryItem, clearCheckedGroceryItems, markAllGroceryItems, regenerateGroceryList } from '../lib/api'
 import { haptic } from '../lib/haptic'
 import PullToRefresh from './PullToRefresh'
 import { SkeletonList } from './Skeleton'
@@ -59,6 +59,18 @@ export default function GroceryView({ showToast }: { showToast: (msg: string, ty
         next.delete(itemId)
         return next
       })
+    }
+  }
+
+  async function handleRefresh() {
+    try {
+      await regenerateGroceryList()
+      haptic('success')
+      showToast('List refreshed!', 'success')
+      loadList()
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to refresh list.', 'error')
     }
   }
 
@@ -138,7 +150,7 @@ export default function GroceryView({ showToast }: { showToast: (msg: string, ty
   )
 
   return (
-    <PullToRefresh onRefresh={loadList}>
+    <PullToRefresh onRefresh={handleRefresh}>
       <div className="px-4 py-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -148,6 +160,13 @@ export default function GroceryView({ showToast }: { showToast: (msg: string, ty
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleRefresh}
+              className="p-2 rounded-full bg-[#F0E6E0] text-[#8C8C8C] active:scale-90 transition-transform"
+              aria-label="Refresh list"
+            >
+              <RefreshCw size={16} />
+            </button>
             <button
               onClick={copyList}
               className="flex items-center gap-1.5 rounded-full bg-[#FFD93D] px-4 py-2 text-sm font-semibold text-[#2D2D2D] active:scale-95 transition-transform shadow-sm"

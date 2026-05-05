@@ -755,6 +755,14 @@ def schedule_match(match_id: str, payload: ScheduleMatch, user: User = Depends(g
         match.status = "scheduled"
         db.commit()
     
+    # Regenerate grocery list to reflect new meal
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    if gl:
+        _regenerate_grocery_list(gl, couple, db)
+    
     return {"ok": True}
 
 
@@ -1097,21 +1105,49 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
         db.add(gl)
         db.flush()
     
-    # Always regenerate from current calendar — meals may have changed
-    cal = db.query(WeeklyCalendar).filter(
-        WeeklyCalendar.couple_id == couple.id,
-        WeeklyCalendar.week_start == week_start,
-    ).first()
+    # Only regenerate if list is empty — preserve item IDs so check/uncheck works
+    existing_count = db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).count()
+    if existing_count == 0:
+        _regenerate_grocery_list(gl, couple, db)
     
-    # Save checked states before clearing so we can restore them
+    db.refresh(gl)
+    
+    return {
+        "id": gl.id,
+        "week_start": str(gl.week_start),
+        "is_shopped": gl.is_shopped,
+        "items": [
+            {
+                "id": i.id,
+                "ingredient_name": i.ingredient_name,
+                "quantity": i.quantity,
+                "unit": i.unit,
+                "category": i.category,
+                "source_recipe_ids": i.source_recipe_ids or [],
+                "is_checked": i.is_checked,
+                "is_substitution": i.is_substitution,
+                "substitution_reason": i.substitution_reason,
+            }
+            for i in gl.items
+        ],
+    }
+
+
+def _regenerate_grocery_list(gl: GroceryList, couple: Couple, db: Session):
+    """Rebuild grocery items from current calendar. Called when list is empty or explicitly refreshed."""
+    # Save checked states before clearing
     existing_items = db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).all()
     checked_names = {item.ingredient_name.lower() for item in existing_items if item.is_checked}
     
     # Clear old items
     db.query(GroceryItem).filter(GroceryItem.grocery_list_id == gl.id).delete(synchronize_session=False)
     
+    cal = db.query(WeeklyCalendar).filter(
+        WeeklyCalendar.couple_id == couple.id,
+        WeeklyCalendar.week_start == gl.week_start,
+    ).first()
+    
     if cal:
-        # Aggregate ingredients from scheduled matches
         day_fields = ["monday_match_id", "tuesday_match_id", "wednesday_match_id",
                      "thursday_match_id", "friday_match_id", "saturday_match_id", "sunday_match_id"]
         ingredient_map = {}
@@ -1123,7 +1159,6 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
                 if match:
                     for ing in match.recipe.ingredients:
                         key = ing.name
-                        # Sanitize quantity — handle ranges like "2-3" or strings
                         raw_qty = ing.quantity
                         if raw_qty is None:
                             qty = 0.0
@@ -1173,32 +1208,32 @@ def get_grocery_list(user: User = Depends(get_current_user), db: Session = Depen
                     unit=data["unit"],
                     category=data["category"],
                     source_recipe_ids=data["recipe_ids"],
-                    is_checked=name.lower() in checked_names,  # restore checked state
+                    is_checked=name.lower() in checked_names,
                 )
                 db.add(gi)
     
     db.commit()
     db.refresh(gl)
-    
-    return {
-        "id": gl.id,
-        "week_start": str(gl.week_start),
-        "is_shopped": gl.is_shopped,
-        "items": [
-            {
-                "id": i.id,
-                "ingredient_name": i.ingredient_name,
-                "quantity": i.quantity,
-                "unit": i.unit,
-                "category": i.category,
-                "source_recipe_ids": i.source_recipe_ids or [],
-                "is_checked": i.is_checked,
-                "is_substitution": i.is_substitution,
-                "substitution_reason": i.substitution_reason,
-            }
-            for i in gl.items
-        ],
-    }
+
+
+@app.post("/grocery/regenerate")
+def regenerate_grocery_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Explicitly regenerate grocery list from current calendar."""
+    couple = get_couple_for_user(user, db, required=False)
+    if not couple:
+        return {"items": []}
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    if not gl:
+        gl = GroceryList(id=str(uuid.uuid4()), couple_id=couple.id, week_start=week_start)
+        db.add(gl)
+        db.flush()
+    _regenerate_grocery_list(gl, couple, db)
+    return {"ok": True, "items_count": len(gl.items)}
 
 
 @app.post("/grocery/check")
@@ -1456,6 +1491,14 @@ def remove_meal(day: str, user: User = Depends(get_current_user), db: Session = 
     
     setattr(cal, field, None)
     db.commit()
+    
+    # Regenerate grocery list to reflect removed meal
+    gl = db.query(GroceryList).filter(
+        GroceryList.couple_id == couple.id,
+        GroceryList.week_start == week_start,
+    ).first()
+    if gl:
+        _regenerate_grocery_list(gl, couple, db)
     
     return {"ok": True, "message": f"Removed from {day}. Match is back in your matches list."}
 
